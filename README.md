@@ -1,2 +1,2 @@
-# Proyecto-integrador-A
+# Proyecto-integrador
 Simulador para estudiantes de Administración
