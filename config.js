@@ -6,7 +6,7 @@
            en modo de demostración y guarda solo en cada navegador.
    ===================================================================== */
 window.PI_CONFIG = {
-  apiUrl: "https://script.google.com/macros/s/AKfycby4U1tycQePreTdXWnIYPKg-zQWt7zoELZkK9J_2HGOFzRRJHBbfJqICrRr94PmkCEx/exec",
+  apiUrl: "https://script.google.com/macros/s/AKfycbzvyfYDLL8KemPbAi-2AGxvVcEiRxCq1Fu61BLsRAE80dz0dKjQ9tkBRhHa1FULY2ap/exec",
 
   // Cada cuántos segundos se actualiza lo que captura el resto del equipo.
   segundosSincronizacion: 5,
