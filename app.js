@@ -384,7 +384,30 @@ function Step({n,t,done,children,open}){
   h("summary",{style:{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}},h("span",{className:"pill "+(done?"ok":"wa")},done?"✓ Paso "+n:"Paso "+n),h("span",{style:{fontSize:"1.05rem"}},t)),
   h("div",{style:{marginTop:10}},children));
 }
-function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,tomadas}){
+/* ---------- Docente: asignar a mano o al azar una alternativa A o B desde «Mi equipo» ---------- */
+function AsignaDoc({t,k,a,sorteo,reassign}){
+ const [sel,setSel]=useState(""),[otra,setOtra]=useState(""),[busy,setBusy]=useState(""),[msg,setMsg]=useState("");
+ const cur=str(a.n),free=POOL.filter(x=>!takenBy(sorteo,x)&&x.n!==cur);
+ const go=async(name,tag)=>{if(busy)return;setBusy(tag);setMsg("");let r;
+  try{r=await reassign(t,k,name,"Asignación de la docente");}catch(e){r={ok:false,msg:"No se pudo guardar. Inténtalo de nuevo."};}
+  setBusy("");if(r.ok){setMsg("✓ Alternativa "+k+" asignada: "+r.n+".");setSel("");setOtra("");}else setMsg(r.msg);};
+ return h("div",{style:{border:"2px dashed var(--or)",borderRadius:10,padding:"10px 12px",margin:"8px 0",background:"var(--card, #fff)"}},
+  h("b",null,"🎓 Asignar la alternativa "+k+" (solo docente)"),
+  cur?h("p",{className:"sm mut",style:{margin:"4px 0"}},"Actual: "+cur+". Si la cambias, se borra lo que el equipo capturó de ella."):null,
+  h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
+   h("div",{style:{flex:"1 1 240px"}},h("label",{className:"l sm",htmlFor:"ad"+t+k},"Elegir del catálogo"),
+    h("select",{id:"ad"+t+k,value:sel,onChange:e=>setSel(e.target.value)},h("option",{value:""},"Elegir…"),
+     CAT.filter(c=>free.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},free.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n)))))),
+   h("button",{className:"btn sm",disabled:!sel||!!busy,onClick:()=>go(sel,"s")},busy==="s"?"Guardando…":"Asignar")),
+  h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
+   h("div",{style:{flex:"1 1 240px"}},h("label",{className:"l sm",htmlFor:"ao"+t+k},"O escribir otra organización"),
+    h("input",{id:"ao"+t+k,type:"text",value:otra,placeholder:"Nombre de la empresa",onChange:e=>setOtra(e.target.value)})),
+   h("button",{className:"btn sm",disabled:otra.trim().length<3||!!busy,onClick:()=>go(otra.trim(),"o")},busy==="o"?"Guardando…":"Asignar")),
+  h("div",{className:"row",style:{marginTop:6}},
+   h("button",{className:"btn alt sm",disabled:!!busy||!free.length,onClick:()=>go(null,"r")},busy==="r"?"Sorteando…":"🎲 Asignar al azar")),
+  msg?h("p",{role:"status",className:"sm",style:{fontWeight:700,marginTop:6}},msg):null);
+}
+function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,reassign,tomadas}){
  const ms=members(tm),lid=leaderOf(tm),iAmLead=!!me&&lid===me,canEdit=!!me||isAdmin,g=grpOf(t);
  const A=k=>(tm.alts&&tm.alts[k])||{},el=empOfTeam(tm);
  const [pick,setPick]=useState(""),[conf,setConf]=useState(false),[chg,setChg]=useState(false),[cp,setCp]=useState("");
@@ -438,7 +461,7 @@ function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,tomadas}){
       [A("A").n,A("B").n].map(n=>{const it=CATALL.find(x=>x.n===n);return it?h("div",{key:n,className:"sm"},h("b",null,it.n+": "),it.links.map(([lt,u],j)=>h("span",{key:u},j?" · ":"",h("a",{href:u,target:"_blank",rel:"noopener"},lt)))):null;}))
     :h("div",null,h("p",{className:"sm"},"El Director General presiona el botón y la página asigna dos organizaciones del catálogo que ",h("b",null,"ningún otro equipo de Liderazgo ni de Administración tiene"),". La B sale de un giro distinto a la A."),
      spin?h("div",{className:"drum","aria-live":"polite"},"🎲 "+spin):null,
-     iAmLead?h("button",{className:"btn",disabled:dBusy,onClick:runDraw},dBusy?"Sorteando…":"🎲 Sortear nuestras alternativas A y B")
+     iAmLead||isAdmin?h("button",{className:"btn",disabled:dBusy,onClick:runDraw},dBusy?"Sorteando…":isAdmin?"🎲 Sortear A y B al azar para este equipo":"🎲 Sortear nuestras alternativas A y B")
       :h("p",{className:"pill wa",style:{whiteSpace:"normal"}},lid?"Solo "+nameOf(tm,lid)+" (Director General) puede hacer el sorteo.":"Primero alguien debe asumir el rol de Director General (paso 1)."),
      dMsg?h("p",{role:"status",style:{fontWeight:700}},dMsg):null)),
    h("p",{className:"mut sm"},"Para cada una, una investigación rápida: qué hace y qué problema u oportunidad observan. La C la proponen ustedes."),
@@ -447,7 +470,7 @@ function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,tomadas}){
      h("div",{className:"bar"},h("h3",{style:{margin:0}},l),altInfo(a)?h("span",{className:"pill ok"},"Completa"):h("span",{className:"pill wa"},"Por completar")),
      h("p",{className:"sm mut"},d),
      du?h("p",{className:"pill wa",style:{whiteSpace:"normal"}},isAdmin&&du.n>0?"El Equipo "+loc(du.n)+" ya tiene esta organización: propongan otra.":"Esa organización no está disponible: propongan otra."):null,
-     !isC&&!drawn?h("p",{className:"pill wa",style:{whiteSpace:"normal"}},"Se llena sola después del sorteo."):null,
+     !isC&&isAdmin&&reassign?h(AsignaDoc,{t,k,a,sorteo,reassign}):!isC&&!drawn?h("p",{className:"pill wa",style:{whiteSpace:"normal"}},"Se llena sola después del sorteo."):null,
      h("div",{className:"g2"},
       h(Field,{id:k+"n",l:"Nombre de la organización",v:a.n,ro:!canEdit||!isC,on:v=>{p(k,"n",v);if(isC)p(k,"orig","Propuesta del equipo",0);},ph:isC?"Ej.: Taller mecánico Hermanos López":""}),
       h("div",null,h("label",{className:"l",htmlFor:k+"tp"},"Tipo"),h("select",{id:k+"tp",value:str(a.tipo),disabled:!canEdit||!isC,onChange:e=>p(k,"tipo",e.target.value,0)},h("option",{value:""},"Elegir…"),TIPOS.map(x=>h("option",{key:x},x)))),
@@ -1353,7 +1376,11 @@ function App(){
  const CLR={que:"",prob_t:"",contacto:"",cargo:"",medio:"",fecha:"",acepta:"",evid:"",notas:"",acc:"",disp:"",prob:"",imp:"",via:"",ubi:"",fort:"",ries:"",hall:""};
  const reassign=async(t,slot,name,motivo)=>{const tmx=teams[t]||{},al=tmx.alts||{},cur=str(al[slot]&&al[slot].n),oth=str(al[slot==="A"?"B":"A"]&&al[slot==="A"?"B":"A"].n);
   const othCat=(CATALL.find(x=>x.n===oth)||{}).cat;let x=null;
-  if(name){x=CATALL.find(y=>y.n===name);if(!x)return {ok:false,msg:"No se encontró esa organización."};
+  if(name){name=String(name).trim();x=CATALL.find(y=>y.n===name)||CATALL.find(y=>norm(y.n)===norm(name))||{n:name,tipo:"Negocio o empresa local",s:""};
+   if(slug(x.n)===slug(cur))return {ok:false,msg:"Esa ya es la organización actual de la alternativa "+slot+"."};
+   if(slug(x.n)===slug(oth))return {ok:false,msg:"Esa organización ya es la otra alternativa de este equipo."};
+   const usadaPor=Object.keys(teams).find(n=>Number(n)!==t&&teams[n]&&teams[n].alts&&["A","B","C"].some(k=>teams[n].alts[k]&&slug(str(teams[n].alts[k].n))===slug(x.n)));
+   if(usadaPor)return {ok:false,msg:"Esa organización ya la tiene "+tLab(Number(usadaPor))+". Elige otra."};
    if(!(await claim(x,t,slot)))return {ok:false,msg:"Esa organización acaba de asignarse a otro equipo. Elige otra."};}
   else{const tk=new Set(Object.keys(sorteo));let c=POOL.filter(y=>!tk.has(slug(y.n))&&y.cat!==othCat&&y.n!==cur);if(!c.length)c=POOL.filter(y=>!tk.has(slug(y.n))&&y.n!==cur);
    while(c.length&&!x){const y=c[Math.floor(Math.random()*c.length)];if(await claim(y,t,slot))x=y;else c=c.filter(z=>z!==y);}
@@ -1385,7 +1412,7 @@ function App(){
  else if(view==="inicio"||(!inTeam&&!/^(docente|reportes|sorteo|opciones|instr)$/.test(view)))body=h(Start,{teams,go,isAdmin,eqSes,meSes,nav});
  else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
  else if(view==="reportes"&&isAdmin)body=h(Reportes,{teams,allW,grades});
- else if(view==="equipo")body=h(Equipo,{t:team,tm,me,teams,isAdmin,myName,sorteo,drawAB,tomadas,wdocs,addMem,libresSrv:(pub.libres&&pub.libres.n)||[],setView:nav,wm:(p,v,d)=>write("teams/"+team,p,v,d)});
+ else if(view==="equipo")body=h(Equipo,{t:team,tm,me,teams,isAdmin,myName,sorteo,drawAB,reassign,tomadas,wdocs,addMem,libresSrv:(pub.libres&&pub.libres.n)||[],setView:nav,wm:(p,v,d)=>write("teams/"+team,p,v,d)});
  else if(view==="entregas")body=h(Entregas,{t:team,tm,wdocs,me,isAdmin,setView,wl:(i,p,v)=>write("teams/"+team+"/w/"+i,p,v)});
  else if(view==="reporte")body=h(Reporte,{t:team,tm,wdocs,myName});
  else if(/^s\d$/.test(view)){const wi=+view.slice(1);body=h(Semana,{key:wi,wi,t:team,tm,wd:wdocs[wi]||{},me,myName,isAdmin,setView:nav,gr:grades[team]||{},ww:(p,v,d)=>write("teams/"+team+"/w/"+wi,p,v,d),wg:(p,v)=>write("grades/"+team,p,v)});}
