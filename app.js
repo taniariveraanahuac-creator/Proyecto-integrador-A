@@ -1059,6 +1059,46 @@ function TeamCard({t,tm,teams,isAdmin,me,team,busy,run,canDraw,request,setEd,ed,
 }
 
 /* ---------- Tablero del sorteo ---------- */
+/* ---------- Docente: asignación directa de A, B y C para los 10 equipos (el sorteo es la segunda opción) ---------- */
+function CeldaAsigna({t,k,a,teams,sorteo,reassign,wC}){
+ const [sel,setSel]=useState(""),[otra,setOtra]=useState(""),[busy,setBusy]=useState(""),[msg,setMsg]=useState("");
+ const cur=str(a.n),free=POOL.filter(x=>!takenBy(sorteo,x)&&x.n!==cur);
+ const usadaPor=n=>{const sl=slug(n);if(!sl)return 0;const v=sorteo&&sorteo[sl];if(v&&v.t&&v.t!==t)return v.t;
+  for(let i=1;i<=NT;i++){if(i===t)continue;const al=teams[i]&&teams[i].alts;if(al&&["A","B","C"].some(x=>al[x]&&slug(str(al[x].n))===sl))return i;}return 0;};
+ const fin=(r)=>{setBusy("");if(r.ok){setMsg("✓ "+r.n);setSel("");setOtra("");}else setMsg(r.msg);};
+ const go=async(name,tag)=>{if(busy)return;setBusy(tag);setMsg("");
+  if(k==="C"){const n=String(name||"").trim(),it=CATALL.find(x=>norm(x.n)===norm(n));const u=usadaPor(n);
+   if(u){fin({ok:false,msg:"Ya la tiene "+tLab(u)+"."});return;}
+   const own=["A","B"].some(x=>teams[t]&&teams[t].alts&&teams[t].alts[x]&&slug(str(teams[t].alts[x].n))===slug(n));if(own){fin({ok:false,msg:"Ya es la A o la B de este equipo."});return;}
+   try{wC(t,"n",it?it.n:n,0);wC(t,"tipo",it?it.tipo:(str(a.tipo)||"Empresa familiar"),0);if(it)wC(t,"giro",it.s,0);wC(t,"orig","Asignada por la docente",0);fin({ok:true,n:it?it.n:n});}
+   catch(e){fin({ok:false,msg:"No se pudo guardar."});}return;}
+  let r;try{r=await reassign(t,k,name,"Asignación directa de la docente");}catch(e){r={ok:false,msg:"No se pudo guardar. Inténtalo de nuevo."};}fin(r);};
+ const val=sel==="__otra"?otra.trim():sel;
+ return h("td",{style:{minWidth:220,verticalAlign:"top"}},
+  h("div",{style:{fontWeight:700,minHeight:20}},cur||h("span",{className:"mut",style:{fontWeight:400}},"Sin asignar")),
+  h("select",{"aria-label":tLab(t)+" alternativa "+k,value:sel,onChange:e=>setSel(e.target.value),style:{marginTop:4}},
+   h("option",{value:""},cur?"Cambiar por…":"Asignar…"),h("option",{value:"__otra"},"✍️ Escribir otra organización"),
+   CAT.filter(c=>free.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},free.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n))))),
+  sel==="__otra"?h("input",{type:"text","aria-label":"Nombre de la organización",value:otra,placeholder:"Nombre de la empresa",onChange:e=>setOtra(e.target.value),style:{marginTop:4}}):null,
+  h("div",{className:"row",style:{marginTop:4}},
+   h("button",{className:"btn sm",disabled:val.length<3||!!busy,onClick:()=>go(val,"s")},busy==="s"?"Guardando…":"Asignar"),
+   k!=="C"?h("button",{className:"btn alt sm",disabled:!!busy||!free.length,onClick:()=>go(null,"r"),title:"Asignar al azar una organización libre"},busy==="r"?"…":"🎲 Al azar"):null),
+  msg?h("div",{className:"sm",role:"status",style:{fontWeight:700,marginTop:4}},msg):null);
+}
+function PanelAsigna({teams,sorteo,reassign,wC,run,busy}){
+ return h("div",{className:"card",style:{borderColor:"var(--or)",borderWidth:2}},
+  h("h2",null,"🎓 Asignación de organizaciones (docente)"),
+  h("p",{className:"sm"},"Asigna directamente la alternativa ",h("b",null,"A, B o C")," de cualquier equipo de los dos grupos: elige del catálogo o escribe otra organización. El sorteo es opcional: usa «🎲 Al azar» en una casilla o «🎲 Sortear A y B» para el equipo completo."),
+  h("p",{className:"sm mut"},"Una organización no se puede repetir entre equipos. Si cambias una alternativa que el equipo ya investigó, se borra lo que había capturado de ella."),
+  GRUPOS.map(g=>h("div",{key:g.k,style:{marginTop:12}},h("h3",{style:{margin:"0 0 6px"}},g.n),
+   h("div",{className:"w"},h("table",null,
+    h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"A"),h("th",null,"B"),h("th",null,"C · propuesta"))),
+    h("tbody",null,[1,2,3,4,5].map(i=>{const t=g.off+i,tm=teams[t]||{},al=tm.alts||{};
+     return h("tr",{key:t},
+      h("td",{style:{verticalAlign:"top",minWidth:110}},h("b",null,"Equipo "+i),tm.elegida?h("div",{className:"sm mut"},"Eligió: "+tm.elegida):null,
+       !tm.sorteoAt?h("button",{className:"btn alt sm",style:{marginTop:6},disabled:!!busy,onClick:()=>run(t)},busy===t?"Sorteando…":"🎲 Sortear A y B"):h("div",{className:"sm mut",style:{marginTop:4}},"A y B asignadas")),
+      ["A","B","C"].map(k=>h(CeldaAsigna,{key:k+"-"+t,t,k,a:al[k]||{},teams,sorteo,reassign,wC})));}))))))); 
+}
 function Sorteo({teams,sorteo,isAdmin,me,team,drawAB,releaseDraw,reassign,request,attend,wC}){
  const [spin,setSpin]=useState(""),[last,setLast]=useState(null),[busy,setBusy]=useState(0),[conf,setConf]=useState(""),[ed,setEd]=useState(0);
  const solic=Array.from({length:NT},(_,i)=>i+1).filter(n=>teams[n]&&teams[n].solicitud&&teams[n].solicitud.estado==="pendiente");
@@ -1069,6 +1109,7 @@ function Sorteo({teams,sorteo,isAdmin,me,team,drawAB,releaseDraw,reassign,reques
   await new Promise(x=>setTimeout(x,1500));clearInterval(iv);setSpin("");setLast({t,...r});setBusy(0);return r;};
  const runAll=async g=>{for(let i=1;i<=5;i++){const t=g.off+i;if(teams[t]&&teams[t].sorteoAt)continue;const r=await run(t);if(!r.ok)break;await new Promise(x=>setTimeout(x,700));}};
  return h("div",{className:"stack"},
+  isAdmin?h(PanelAsigna,{teams,sorteo,reassign,wC,run,busy}):null,
   h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"🎲 Sorteo de organizaciones"),
    h("ol",{style:{paddingLeft:"1.2em"}},
     h("li",null,"Cada equipo recibe por sorteo ",h("b",null,"dos organizaciones del catálogo"),": la alternativa A y la alternativa B."),
