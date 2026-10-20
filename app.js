@@ -168,6 +168,13 @@ const GRUPOS=[{k:"L",n:"Liderazgo",off:0,lista:[]},
  {k:"A",n:"Administración",off:5,lista:[]}];
 const NT=10;
 const grpOf=t=>GRUPOS[t>5?1:0],loc=t=>(t-1)%5+1,tLab=t=>grpOf(t).n+" · Equipo "+loc(t);
+const tCorto=t=>grpOf(t).n.slice(0,3)+". E"+loc(t);
+/* Docente: opciones del catálogo. Primero las libres; después las que ya tiene otro equipo (se pueden repetir). */
+const OptsOrg=({sorteo,t,excl})=>{const ex=(excl||[]).map(n=>slug(str(n))).filter(Boolean),
+  lib=POOL.filter(x=>!takenBy(sorteo,x)&&!ex.includes(slug(x.n))),oc=POOL.filter(x=>{const v=takenBy(sorteo,x);return v&&v.t!==t&&!ex.includes(slug(x.n));});
+ return CAT.filter(c=>lib.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},lib.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n))))
+  .concat(oc.length?[h("optgroup",{key:"__rep",label:"↻ Ya asignadas a otro equipo (se repetirá)"},oc.map(x=>h("option",{key:"r"+x.n,value:x.n},x.n+" — "+tCorto(takenBy(sorteo,x).t))))]:[]);};
+const msgRep=r=>"✓ "+r.n+(r.rep>0?" (repetida: también la tiene "+tLab(r.rep)+")":r.rep?" (repetida)":"");
 const fullName=([ap,no])=>((no||"")+" "+(ap||"")).trim();
 const rosterOf=g=>g.lista.slice().sort((a,b)=>a[0].localeCompare(b[0],"es"));
 const members=m=>Object.entries((m&&m.mem)||{}).filter(([,x])=>x&&!x.del&&str(x.n).trim()).sort((a,b)=>(a[1].t||0)-(b[1].t||0));
@@ -390,21 +397,20 @@ function AsignaDoc({t,k,a,sorteo,reassign}){
  const cur=str(a.n),free=POOL.filter(x=>!takenBy(sorteo,x)&&x.n!==cur);
  const go=async(name,tag)=>{if(busy)return;setBusy(tag);setMsg("");let r;
   try{r=await reassign(t,k,name,"Asignación de la docente");}catch(e){r={ok:false,msg:"No se pudo guardar. Inténtalo de nuevo."};}
-  setBusy("");if(r.ok){setMsg("✓ Alternativa "+k+" asignada: "+r.n+".");setSel("");setOtra("");}else setMsg(r.msg);};
+  setBusy("");if(r.ok){setMsg("Alternativa "+k+": "+msgRep(r));setSel("");setOtra("");}else setMsg(r.msg);};
  return h("div",{style:{border:"2px dashed var(--or)",borderRadius:10,padding:"10px 12px",margin:"8px 0",background:"var(--card, #fff)"}},
   h("b",null,"🎓 Asignar la alternativa "+k+" (solo docente)"),
   cur?h("p",{className:"sm mut",style:{margin:"4px 0"}},"Actual: "+cur+". Si la cambias, se borra lo que el equipo capturó de ella."):null,
   h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
    h("div",{style:{flex:"1 1 240px"}},h("label",{className:"l sm",htmlFor:"ad"+t+k},"Elegir del catálogo"),
-    h("select",{id:"ad"+t+k,value:sel,onChange:e=>setSel(e.target.value)},h("option",{value:""},"Elegir…"),
-     CAT.filter(c=>free.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},free.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n)))))),
+    h("select",{id:"ad"+t+k,value:sel,onChange:e=>setSel(e.target.value)},h("option",{value:""},"Elegir…"),OptsOrg({sorteo,t,excl:[cur]}))),
    h("button",{className:"btn sm",disabled:!sel||!!busy,onClick:()=>go(sel,"s")},busy==="s"?"Guardando…":"Asignar")),
   h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
    h("div",{style:{flex:"1 1 240px"}},h("label",{className:"l sm",htmlFor:"ao"+t+k},"O escribir otra organización"),
     h("input",{id:"ao"+t+k,type:"text",value:otra,placeholder:"Nombre de la empresa",onChange:e=>setOtra(e.target.value)})),
    h("button",{className:"btn sm",disabled:otra.trim().length<3||!!busy,onClick:()=>go(otra.trim(),"o")},busy==="o"?"Guardando…":"Asignar")),
   h("div",{className:"row",style:{marginTop:6}},
-   h("button",{className:"btn alt sm",disabled:!!busy||!free.length,onClick:()=>go(null,"r")},busy==="r"?"Sorteando…":"🎲 Asignar al azar")),
+   h("button",{className:"btn alt sm",disabled:!!busy,onClick:()=>go(null,"r"),title:free.length?"Asigna una organización libre al azar":"Ya no hay libres: asigna una al azar aunque se repita"},busy==="r"?"Sorteando…":"🎲 Asignar al azar")),
   msg?h("p",{role:"status",className:"sm",style:{fontWeight:700,marginTop:6}},msg):null);
 }
 function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,reassign,tomadas}){
@@ -412,7 +418,7 @@ function Ruta({t,tm,me,teams,wm,isAdmin,myName,sorteo,drawAB,reassign,tomadas}){
  const A=k=>(tm.alts&&tm.alts[k])||{},el=empOfTeam(tm);
  const [pick,setPick]=useState(""),[conf,setConf]=useState(false),[chg,setChg]=useState(false),[cp,setCp]=useState("");
  const taken=[1,2,3,4,5].map(i=>g.off+i).filter(n=>n!==t).map(n=>({n,e:empOfTeam(teams[n])})).filter(x=>x.e);
- const dup=k=>{const a=A(k);if(!str(a.n).trim())return null;const sl=slug(a.n);if(k==="C"&&tomadas&&(sl in tomadas))return {n:tomadas[sl]};return taken.find(x=>norm(x.e.n)===norm(a.n))||null;};
+ const dup=k=>{const a=A(k);if(!str(a.n).trim()||a.rep)return null;const sl=slug(a.n);if(k==="C"&&tomadas&&(sl in tomadas))return {n:tomadas[sl]};return taken.find(x=>norm(x.e.n)===norm(a.n))||null;};
  const p=(k,f,v,d)=>wm(["alts",k,f],v,d==null?450:d);
  const s1=!!lid&&ms.length>0&&ms.every(([id])=>rolesOf(tm,id).length);
  const drawn=!!tm.sorteoAt;
@@ -992,7 +998,7 @@ function Ajuste({t,tm,sorteo,reassign,attend,onClose}){
  const hist=Object.entries(tm.ajustes||{}).sort((x,y)=>(y[1].at||0)-(x[1].at||0));
  const sol=tm.solicitud&&tm.solicitud.estado==="pendiente"?tm.solicitud:null;
  const go=async(slot,name)=>{if(busy)return;setBusy(slot);setMsg("");const r=await reassign(t,slot,name,mot.trim());setBusy("");
-  if(r.ok){setMsg("Alternativa "+slot+" cambiada a: "+r.n+".");setSel(p=>({...p,[slot]:""}));}else setMsg(r.msg);};
+  if(r.ok){setMsg("Alternativa "+slot+" cambiada a: "+msgRep(r));setSel(p=>({...p,[slot]:""}));}else setMsg(r.msg);};
  return h("div",{className:"ex",style:{margin:"6px 0"}},
   h("div",{className:"bar"},h("h3",{style:{margin:0}},"✏️ Reajuste · "+tLab(t)),h("button",{className:"btn alt sm",onClick:onClose},"Cerrar")),
   sol?h("div",{className:"pill wa",style:{whiteSpace:"normal",display:"block",margin:"8px 0",padding:"8px 12px"}},h("b",null,"Solicitud del equipo: "),sol.txt+" ("+(sol.by||"")+", "+fmt(sol.at)+") ",h("button",{className:"btn sm",style:{marginLeft:6},onClick:()=>attend(t)},"Marcar como atendida")):null,
@@ -1001,11 +1007,10 @@ function Ajuste({t,tm,sorteo,reassign,attend,onClose}){
    return h("div",{key:k,style:{marginTop:10,paddingTop:8,borderTop:"1px solid var(--line)"}},
     h("p",null,h("b",null,"Alternativa "+k+": "),cur||h("span",{className:"mut"},"sin asignar"),tm.elegida===k?h("span",{className:"pill wa",style:{marginLeft:6}},"Es la organización elegida: si la cambian, el equipo deberá volver a elegir"):null),
     h("div",{className:"row",style:{alignItems:"flex-end"}},
-     h("div",{style:{flex:"1 1 260px"}},h("label",{className:"l",htmlFor:"aj"+t+k},"Cambiar por una organización libre"),
-      h("select",{id:"aj"+t+k,value:sel[k],onChange:e=>setSel(p=>({...p,[k]:e.target.value}))},h("option",{value:""},"Elegir…"),
-       CAT.filter(c=>opts.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},opts.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n)))))),
+     h("div",{style:{flex:"1 1 260px"}},h("label",{className:"l",htmlFor:"aj"+t+k},"Cambiar por otra organización (libre o repetida)"),
+      h("select",{id:"aj"+t+k,value:sel[k],onChange:e=>setSel(p=>({...p,[k]:e.target.value}))},h("option",{value:""},"Elegir…"),OptsOrg({sorteo,t,excl:[cur]}))),
      h("button",{className:"btn sm",disabled:!sel[k]||!!busy,onClick:()=>go(k,sel[k])},busy===k?"Guardando…":"Guardar cambio"),
-     h("button",{className:"btn alt sm",disabled:!!busy||!free.length,onClick:()=>go(k,null)},"🎲 Resortear solo la "+k)));}),
+     h("button",{className:"btn alt sm",disabled:!!busy,onClick:()=>go(k,null)},"🎲 Resortear solo la "+k)));}),
   msg?h("p",{role:"status",style:{fontWeight:700,marginTop:8}},msg):null,
   h("p",{className:"sm mut",style:{marginTop:8}},"Al cambiar una alternativa, la anterior vuelve a quedar libre y se borra lo que el equipo había capturado de ella (investigación, contacto y puntajes)."),
   hist.length?h("div",{style:{marginTop:8}},h("b",{className:"sm"},"Historial de reajustes"),h("ul",{className:"sm",style:{paddingLeft:"1.2em",margin:"4px 0"}},hist.map(([id,x])=>h("li",{key:id},fmt(x.at)+" · "+x.slot+": "+(x.de||"—")+" → "+x.a+(x.motivo?" · "+x.motivo:""))))):null);
@@ -1065,12 +1070,12 @@ function CeldaAsigna({t,k,a,teams,sorteo,reassign,wC}){
  const cur=str(a.n),free=POOL.filter(x=>!takenBy(sorteo,x)&&x.n!==cur);
  const usadaPor=n=>{const sl=slug(n);if(!sl)return 0;const v=sorteo&&sorteo[sl];if(v&&v.t&&v.t!==t)return v.t;
   for(let i=1;i<=NT;i++){if(i===t)continue;const al=teams[i]&&teams[i].alts;if(al&&["A","B","C"].some(x=>al[x]&&slug(str(al[x].n))===sl))return i;}return 0;};
- const fin=(r)=>{setBusy("");if(r.ok){setMsg("✓ "+r.n);setSel("");setOtra("");}else setMsg(r.msg);};
+ const fin=(r)=>{setBusy("");if(r.ok){setMsg(msgRep(r));setSel("");setOtra("");}else setMsg(r.msg);};
  const go=async(name,tag)=>{if(busy)return;setBusy(tag);setMsg("");
   if(k==="C"){const n=String(name||"").trim(),it=CATALL.find(x=>norm(x.n)===norm(n));const u=usadaPor(n);
-   if(u){fin({ok:false,msg:"Ya la tiene "+tLab(u)+"."});return;}
+
    const own=["A","B"].some(x=>teams[t]&&teams[t].alts&&teams[t].alts[x]&&slug(str(teams[t].alts[x].n))===slug(n));if(own){fin({ok:false,msg:"Ya es la A o la B de este equipo."});return;}
-   try{wC(t,"n",it?it.n:n,0);wC(t,"tipo",it?it.tipo:(str(a.tipo)||"Empresa familiar"),0);if(it)wC(t,"giro",it.s,0);wC(t,"orig","Asignada por la docente",0);fin({ok:true,n:it?it.n:n});}
+   try{wC(t,"n",it?it.n:n,0);wC(t,"tipo",it?it.tipo:(str(a.tipo)||"Empresa familiar"),0);if(it)wC(t,"giro",it.s,0);wC(t,"orig",u?"Asignada por la docente (repetida)":"Asignada por la docente",0);wC(t,"rep",u?1:"",0);fin({ok:true,n:it?it.n:n,rep:u});}
    catch(e){fin({ok:false,msg:"No se pudo guardar."});}return;}
   let r;try{r=await reassign(t,k,name,"Asignación directa de la docente");}catch(e){r={ok:false,msg:"No se pudo guardar. Inténtalo de nuevo."};}fin(r);};
  const val=sel==="__otra"?otra.trim():sel;
@@ -1078,18 +1083,18 @@ function CeldaAsigna({t,k,a,teams,sorteo,reassign,wC}){
   h("div",{style:{fontWeight:700,minHeight:20}},cur||h("span",{className:"mut",style:{fontWeight:400}},"Sin asignar")),
   h("select",{"aria-label":tLab(t)+" alternativa "+k,value:sel,onChange:e=>setSel(e.target.value),style:{marginTop:4}},
    h("option",{value:""},cur?"Cambiar por…":"Asignar…"),h("option",{value:"__otra"},"✍️ Escribir otra organización"),
-   CAT.filter(c=>free.some(x=>x.cat===c.k)).map(c=>h("optgroup",{key:c.k,label:c.n},free.filter(x=>x.cat===c.k).map(x=>h("option",{key:x.n,value:x.n},x.n))))),
+   OptsOrg({sorteo,t,excl:[cur].concat(k==="C"?["A","B"].map(x=>teams[t]&&teams[t].alts&&teams[t].alts[x]&&teams[t].alts[x].n):[])})),
   sel==="__otra"?h("input",{type:"text","aria-label":"Nombre de la organización",value:otra,placeholder:"Nombre de la empresa",onChange:e=>setOtra(e.target.value),style:{marginTop:4}}):null,
   h("div",{className:"row",style:{marginTop:4}},
    h("button",{className:"btn sm",disabled:val.length<3||!!busy,onClick:()=>go(val,"s")},busy==="s"?"Guardando…":"Asignar"),
-   k!=="C"?h("button",{className:"btn alt sm",disabled:!!busy||!free.length,onClick:()=>go(null,"r"),title:"Asignar al azar una organización libre"},busy==="r"?"…":"🎲 Al azar"):null),
+   k!=="C"?h("button",{className:"btn alt sm",disabled:!!busy,onClick:()=>go(null,"r"),title:free.length?"Asignar al azar una organización libre":"Ya no hay libres: asigna una al azar aunque se repita"},busy==="r"?"…":"🎲 Al azar"):null),
   msg?h("div",{className:"sm",role:"status",style:{fontWeight:700,marginTop:4}},msg):null);
 }
 function PanelAsigna({teams,sorteo,reassign,wC,run,busy}){
  return h("div",{className:"card",style:{borderColor:"var(--or)",borderWidth:2}},
   h("h2",null,"🎓 Asignación de organizaciones (docente)"),
   h("p",{className:"sm"},"Asigna directamente la alternativa ",h("b",null,"A, B o C")," de cualquier equipo de los dos grupos: elige del catálogo o escribe otra organización. El sorteo es opcional: usa «🎲 Al azar» en una casilla o «🎲 Sortear A y B» para el equipo completo."),
-  h("p",{className:"sm mut"},"Una organización no se puede repetir entre equipos. Si cambias una alternativa que el equipo ya investigó, se borra lo que había capturado de ella."),
+  h("p",{className:"sm mut"},"Puedes repetir una organización en varios equipos de Liderazgo o Administración: en la lista aparecen al final, en «↻ Ya asignadas a otro equipo». El sorteo de los alumnos sigue sin repetir. Si cambias una alternativa que el equipo ya investigó, se borra lo que había capturado de ella."),
   GRUPOS.map(g=>h("div",{key:g.k,style:{marginTop:12}},h("h3",{style:{margin:"0 0 6px"}},g.n),
    h("div",{className:"w"},h("table",null,
     h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"A"),h("th",null,"B"),h("th",null,"C · propuesta"))),
@@ -1415,27 +1420,34 @@ function App(){
   await writeObj("teams/"+t,{alts:{A:f(a),B:f(b)},sorteoAt:Date.now(),sorteoBy:myName||"Docente"});
   return {ok:true,a:a.n,b:b.n};};
  const CLR={que:"",prob_t:"",contacto:"",cargo:"",medio:"",fecha:"",acepta:"",evid:"",notas:"",acc:"",disp:"",prob:"",imp:"",via:"",ubi:"",fort:"",ries:"",hall:""};
- const reassign=async(t,slot,name,motivo)=>{const tmx=teams[t]||{},al=tmx.alts||{},cur=str(al[slot]&&al[slot].n),oth=str(al[slot==="A"?"B":"A"]&&al[slot==="A"?"B":"A"].n);
+ /* Libera el registro del sorteo de una organización solo si es de este equipo; si otro equipo la tiene repetida, el registro pasa a ese equipo. */
+ const soltar=async(id,t)=>{if(!id)return;const v=sorteo[id];if(v&&v.t&&v.t!==t)return;
+  const otro=Object.keys(teams).map(Number).find(n=>n!==t&&teams[n]&&teams[n].alts&&["A","B","C"].some(k=>teams[n].alts[k]&&slug(str(teams[n].alts[k].n))===id));
+  if(otro){const rec={...(v||{}),t:otro,at:Date.now()};if(db){try{await db.doc("sorteo/"+id).set(rec);}catch(e){}}setSorteo(p=>({...p,[id]:rec}));return;}
+  if(db){try{await db.doc("sorteo/"+id).delete();}catch(e){}}setSorteo(prev=>{const o={...prev};delete o[id];return o;});};
+ const reassign=async(t,slot,name,motivo)=>{let rep=0;const tmx=teams[t]||{},al=tmx.alts||{},cur=str(al[slot]&&al[slot].n),oth=str(al[slot==="A"?"B":"A"]&&al[slot==="A"?"B":"A"].n);
   const othCat=(CATALL.find(x=>x.n===oth)||{}).cat;let x=null;
   if(name){name=String(name).trim();x=CATALL.find(y=>y.n===name)||CATALL.find(y=>norm(y.n)===norm(name))||{n:name,tipo:"Negocio o empresa local",s:""};
    if(slug(x.n)===slug(cur))return {ok:false,msg:"Esa ya es la organización actual de la alternativa "+slot+"."};
    if(slug(x.n)===slug(oth))return {ok:false,msg:"Esa organización ya es la otra alternativa de este equipo."};
    const usadaPor=Object.keys(teams).find(n=>Number(n)!==t&&teams[n]&&teams[n].alts&&["A","B","C"].some(k=>teams[n].alts[k]&&slug(str(teams[n].alts[k].n))===slug(x.n)));
-   if(usadaPor)return {ok:false,msg:"Esa organización ya la tiene "+tLab(Number(usadaPor))+". Elige otra."};
-   if(!(await claim(x,t,slot)))return {ok:false,msg:"Esa organización acaba de asignarse a otro equipo. Elige otra."};}
+   const sv=sorteo[slug(x.n)],deOtro=sv&&sv.t&&sv.t!==t?sv.t:0;
+   if(usadaPor||deOtro){if(!isAdmin)return {ok:false,msg:"Esa organización ya la tiene "+tLab(Number(usadaPor||deOtro))+". Elige otra."};rep=Number(usadaPor||deOtro);}
+   else if(!(await claim(x,t,slot))){if(!isAdmin)return {ok:false,msg:"Esa organización acaba de asignarse a otro equipo. Elige otra."};rep=-1;}}
   else{const tk=new Set(Object.keys(sorteo));let c=POOL.filter(y=>!tk.has(slug(y.n))&&y.cat!==othCat&&y.n!==cur);if(!c.length)c=POOL.filter(y=>!tk.has(slug(y.n))&&y.n!==cur);
    while(c.length&&!x){const y=c[Math.floor(Math.random()*c.length)];if(await claim(y,t,slot))x=y;else c=c.filter(z=>z!==y);}
+   if(!x&&isAdmin){const own=[cur,oth].map(slug);let c2=POOL.filter(y=>!own.includes(slug(y.n))&&y.cat!==othCat);if(!c2.length)c2=POOL.filter(y=>!own.includes(slug(y.n)));
+    if(c2.length){x=c2[Math.floor(Math.random()*c2.length)];const v=takenBy(sorteo,x);rep=v?v.t:-1;}}
    if(!x)return {ok:false,msg:"No quedan organizaciones libres para resortear."};}
-  if(cur&&slug(cur)!==slug(x.n)){if(db){try{await db.doc("sorteo/"+slug(cur)).delete();}catch(e){}}setSorteo(prev=>{const o={...prev};delete o[slug(cur)];return o;});}
-  const both=!!oth;const patch={alts:{[slot]:{...CLR,n:x.n,tipo:x.tipo,giro:x.s,orig:"Reajuste"}},ajustes:{["a"+Date.now().toString(36)]:{slot,de:cur,a:x.n,motivo:motivo||"",at:Date.now()}}};
+  if(cur&&slug(cur)!==slug(x.n))await soltar(slug(cur),t);
+  const both=!!oth;const patch={alts:{[slot]:{...CLR,n:x.n,tipo:x.tipo,giro:x.s,orig:rep?"Docente (repetida)":"Reajuste",rep:rep?1:""}},ajustes:{["a"+Date.now().toString(36)]:{slot,de:cur,a:x.n,motivo:motivo||"",at:Date.now()}}};
   if(both&&!tmx.sorteoAt){patch.sorteoAt=Date.now();patch.sorteoBy="Docente";}
   if(tmx.elegida===slot)patch.elegida="";
-  await writeObj("teams/"+t,patch);return {ok:true,n:x.n};};
+  await writeObj("teams/"+t,patch);return {ok:true,n:x.n,rep};};
  const request=(t,txt)=>writeObj("teams/"+t,{solicitud:{txt,at:Date.now(),by:myName||"",estado:"pendiente"}});
  const attend=t=>writeObj("teams/"+t,{solicitud:{estado:"atendida",atAt:Date.now()}});
  const releaseDraw=async n=>{const ids=Object.entries(sorteo).filter(([,v])=>v&&v.t===n).map(([id])=>id);
-  for(const id of ids){if(db){try{await db.doc("sorteo/"+id).delete();}catch(e){}}}
-  setSorteo(prev=>{const o={...prev};ids.forEach(id=>delete o[id]);return o;});
+  for(const id of ids)await soltar(id,n);
   const e={n:"",tipo:"",giro:"",orig:""};await writeObj("teams/"+n,{alts:{A:e,B:e},sorteoAt:""});};
  const sinSes=!isAdmin&&!eqSes,porConfirmar=!isAdmin&&!!eqSes&&!meOk;
  const tabs=sinSes||porConfirmar?[]:[["inicio","Inicio"],["instr","Instrucciones"],["sorteo","Sorteo"],["opciones","Organizaciones"]].concat(inTeam?[["equipo","Mi equipo"],["entregas","Entregas"],...W.map((w,i)=>["s"+i,w.fin?"S"+(i+1)+" · Final":"S"+(i+1)]),["reporte","Reporte"]]:[]).concat(isAdmin?[["docente","Panel docente"],["reportes","Reportes"]]:[]);
