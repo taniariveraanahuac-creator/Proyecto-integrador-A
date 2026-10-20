@@ -184,14 +184,21 @@ const rolesOf=(tm,id)=>id?ROLES.filter(r=>tm&&tm.roles&&tm.roles[r.k]===id).map(
 const leaderOf=tm=>{const id=tm&&tm.roles&&tm.roles.dg;return id&&nameOf(tm,id)?id:"";};
 const calcW=(wi,nums,k)=>{const c=[];W[wi].c.forEach(f=>c.push(f[1](nums,k,c)));return c;};
 const showC=(wi,i,v)=>typeof v==="string"?v:fm(W[wi].c[i][0])(v);
-/* Plazo de cada semana: su fecha límite a las 23:59, o la prórroga que dé la docente (wd.ext). */
-const limite=(wi,wd)=>Math.max(dt(W[wi].d).getTime(),wd&&wd.ext?dt(wd.ext).getTime():0);
+/* Fecha límite de cada semana: 23:59 de su fecha, o la prórroga que dé la docente (wd.ext).
+   Pasada esa fecha la semana queda VENCIDA, pero sigue abierta para capturar y entregar hasta el
+   cierre general del proyecto (fecha de la S8, o una prórroga posterior). Lo que se entregue después
+   de la fecha límite queda registrado como entrega tardía, con los días de retraso. */
+const vence=(wi,wd)=>Math.max(dt(W[wi].d).getTime(),wd&&wd.ext?dt(wd.ext).getTime():0);
+const cierreGeneral=()=>dt(W[W.length-1].d).getTime();
+const limite=(wi,wd)=>Math.max(vence(wi,wd),cierreGeneral());
 const abierta=(wi,wd)=>Date.now()<=limite(wi,wd);
+const vencida=(wi,wd)=>Date.now()>vence(wi,wd);
 const fcorta=ms=>new Date(ms).toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
-function estado(wd,wi){const lim=dt(W[wi].d).getTime(),lx=limite(wi,wd),pr=lx>lim;
- if(wd&&wd.est==="Entregado"){if(wd.at&&wd.at>lim){if(pr&&wd.at<=lx)return {k:"ok",l:"Entregado con prórroga",c:"ok",s:"✓"};const late=Math.ceil((wd.at-lim)/864e5);return {k:"tarde",l:"Entregado con "+late+" día"+(late>1?"s":"")+" de retraso",c:"wa",s:"Tarde"};}return {k:"ok",l:"Entregado",c:"ok",s:"✓"};}
- if(Date.now()>lx)return {k:"no",l:"No entregado",c:"ko",s:"✗"};
- return {k:"pend",l:pr&&Date.now()>lim?"Pendiente · prórroga al "+fcorta(lx):"Pendiente",c:pr&&Date.now()>lim?"wa":"",s:"·"};}
+function estado(wd,wi){const lim=dt(W[wi].d).getTime(),vx=vence(wi,wd),pr=vx>lim;
+ if(wd&&wd.est==="Entregado"){if(wd.at&&wd.at>vx){const late=Math.ceil((wd.at-vx)/864e5);return {k:"tarde",l:"Entregado con "+late+" día"+(late>1?"s":"")+" de retraso (venció el "+fcorta(vx)+")",c:"wa",s:"Tarde"};}
+  return pr&&wd.at&&wd.at>lim?{k:"ok",l:"Entregado con prórroga",c:"ok",s:"✓"}:{k:"ok",l:"Entregado",c:"ok",s:"✓"};}
+ if(Date.now()>vx)return abierta(wi,wd)?{k:"no",l:"Vencida · sin entregar (aún se puede entregar con retraso)",c:"ko",s:"✗"}:{k:"no",l:"No entregado",c:"ko",s:"✗"};
+ return {k:"pend",l:pr&&Date.now()>lim?"Pendiente · prórroga al "+fcorta(vx):"Pendiente",c:pr&&Date.now()>lim?"wa":"",s:"·"};}
 function score(gr){let p=0;W.forEach((w,i)=>{const c=parseFloat(gr&&gr.c&&gr.c[i]);if(!isNaN(c))p+=c*w.v;});const pi=parseFloat(gr&&gr.pitch);if(!isNaN(pi))p+=pi*PITCHW;return p;}
 const csvq=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
 
@@ -731,7 +738,7 @@ const PASOS_EQUIPO=[
  ["Sigan la ruta de «Mi equipo»","Cinco pasos para elegir la organización: asumir roles; el CEO hace el sorteo de las alternativas A y B y el equipo propone la C; contactar a las tres; compararlas con la matriz ponderada y el análisis cualitativo; elegir una y justificarla."],
  ["Capturen cada semana (S1 a S8)","Abran la pestaña de la semana, lean el objetivo y el ejemplo, y llenen las 5 secciones del formato estándar. Todo se guarda solo mientras escriben y lo ve el resto del equipo en segundos."],
  ["Escribe desde tu rol directivo","En «Perspectiva de cada rol directivo», cada integrante responde la pregunta de su rol (CEO, COO, CFO, CMO, CHRO o CIO). Solo tú puedes escribir en tu recuadro; aparece en el PDF y la docente lo evalúa."],
- ["Entreguen antes de cada fecha límite (23:59)","Cuando la lista de verificación esté completa, el CEO presiona «Marcar como entregada». Después de la fecha límite la semana se cierra y ya no se puede modificar (solo la docente da prórroga)."],
+ ["Entreguen antes de cada fecha límite (23:59)","Cuando la lista de verificación esté completa, el CEO presiona «Marcar como entregada». Después de la fecha límite la semana queda VENCIDA: todavía pueden capturar y entregar hasta el cierre del proyecto (fecha de la S8), pero la entrega queda registrada como tardía con los días de retraso."],
  ["Descarguen el PDF y súbanlo a Brightspace","En «Documento de entrega», cada integrante descarga el PDF de la semana y lo sube a Brightspace. «Reporte» reúne las 8 entregas."],
  ["Entreguen el PROYECTO FINAL (S8)","El "+"martes 24 de noviembre a las 23:59: documento final integrado (PDF de «Reporte» con S1 a S8), presentación del pitch y evidencia de que compartieron la propuesta con la organización. Las ligas se pegan en la S8."],
  ["Revisen la retroalimentación y salgan","En cada semana verán la rúbrica, el nivel de su rol y el comentario de la docente. Si usan una computadora compartida, presionen «Salir» al terminar."]];
@@ -866,7 +873,7 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
  const w=W[wi],k=members(tm).length,nums=w.nu.map((_,i)=>parseFloat(wd&&wd.n&&wd.n[i])||0),cs=calcW(wi,nums,k),st=estado(wd,wi);
  const exC=calcW(wi,w.en,w.ek||0).map((v,i)=>showC(wi,i,v));
  const [,tick]=useState(0);useEffect(()=>{const i=setInterval(()=>tick(x=>x+1),60000);return()=>clearInterval(i);},[]);
- const ab=abierta(wi,wd),entregada=!!(wd&&wd.est==="Entregado"),lx=limite(wi,wd);
+ const ab=abierta(wi,wd),entregada=!!(wd&&wd.est==="Entregado"),lx=limite(wi,wd),vx=vence(wi,wd),venc=Date.now()>vx;
  const canEdit=isAdmin||(!!me&&ab&&!entregada),lead=leaderOf(tm)===me,doc=useRef(null);
  const [conf,setConf]=useState(false),[ext,setExt]=useState(str(wd&&wd.ext));
  const link=str(wd&&wd.link),linkOk=/^https?:\/\/\S+\.\S+/.test(link.trim());
@@ -878,10 +885,12 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h("p",null,h("b",null,"Objetivo: "),w.q),
    h("p",{className:"sm mut"},"Fecha límite: ",h("b",null,fdl(w.d)+", 23:59")," · Valor: ",h("b",null,Math.round(w.v*100)+"%")," · Fuentes sugeridas: "+w.s),
    h("div",{className:"chips",style:{marginTop:8}},ck.map(([l,ok],i)=>h("span",{key:i,className:ok?"ok":""},(ok?"✓ ":"○ ")+l))),
-   h("p",{className:"pill "+(!ab?"ko":entregada?"ok":lx>dt(w.d).getTime()?"wa":""),style:{whiteSpace:"normal",display:"block",marginTop:8,padding:"8px 12px"},role:"status"},
-    !ab?"🔒 El plazo cerró el "+fcorta(lx)+" a las 23:59. La entrega quedó como está; solo la docente puede reabrirla o dar prórroga."
-    :entregada?"✅ Entregada. Para corregirla, el Director General la reabre antes del "+fcorta(lx)+" a las 23:59."
-    :"✏️ Pueden editar hasta el "+fcorta(lx)+" a las 23:59"+(lx>dt(w.d).getTime()?" (prórroga de la docente)":"")+". Después ya no se podrá modificar.")),
+   h("p",{className:"pill "+(!ab?"ko":entregada&&!(st.k==="tarde")?"ok":venc?"ko":vx>dt(w.d).getTime()?"wa":""),style:{whiteSpace:"normal",display:"block",marginTop:8,padding:"8px 12px"},role:"status"},
+    !ab?"🔒 El proyecto cerró el "+fcorta(lx)+" a las 23:59. La entrega quedó como está; solo la docente puede reabrirla o dar prórroga."
+    :entregada?(st.k==="tarde"?"⚠️ "+st.l+". ":"✅ Entregada. ")+"Para corregirla, el Director General la reabre (hasta el "+fcorta(lx)+" a las 23:59)."+(venc&&st.k!=="tarde"?" Ojo: el plazo ya venció; si la reabren y la vuelven a entregar, quedará registrada como entrega tardía.":"")
+    :venc?"⚠️ PLAZO VENCIDO el "+fcorta(vx)+" a las 23:59. Todavía pueden capturar y entregar hasta el "+fcorta(lx)+", pero la entrega quedará registrada como TARDÍA con los días de retraso."
+    :"✏️ Fecha límite: "+fcorta(vx)+" a las 23:59"+(vx>dt(w.d).getTime()?" (prórroga de la docente)":"")+". Después la semana queda vencida: aún se puede entregar, pero se registra como tardía."),
+   wd&&wd._venc?h("p",{className:"sm",style:{color:"var(--kot)",marginTop:6}},"📌 Evidencia: primera edición después del vencimiento el "+fmt(wd._venc)+(wd._vencBy?" por "+wd._vencBy:"")+"."):null),
   h("details",{className:"card"},h("summary",null,"Ver ejemplo (organización ficticia: Hotel Arrecife Cancún)"),
    h("div",{className:"ex",style:{marginTop:10}},w.tx.map((x,i)=>h("p",{key:i},h("b",null,"2."+(i+1)+" "+x+": "),w.et[i])),
     w.nu.length?h("p",{className:"sm"},h("b",null,"3. Datos: "),w.nu.map((x,i)=>x+": "+fm(x)(w.en[i])).join(" · ")):null,
@@ -909,8 +918,8 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h("ul",{style:{listStyle:"none",paddingLeft:0,margin:"6px 0"}},ck.map(([l,ok],i)=>h("li",{key:i,style:{color:ok?"var(--okt)":"var(--mut)",fontWeight:600}},(ok?"✓ ":"○ ")+l))),
    wd&&wd.est==="Entregado"?h("div",null,h("p",{className:"pill "+st.c,style:{whiteSpace:"normal"}},"✅ Entregado el "+fmt(wd.at)+(wd.by?" por "+wd.by:"")),
      (lead&&ab)||isAdmin?h("div",null,h("button",{className:"btn alt sm",style:{marginTop:8},onClick:()=>ww(["est"],"Pendiente",0)},"Reabrir la entrega para corregir")):null)
-    :!ab&&!isAdmin?h("p",{className:"sm",style:{color:"var(--kot)",fontWeight:600}},"El plazo cerró sin que la entrega se marcara. Si hubo una causa justificada, hablen con la docente.")
-    :lead||isAdmin?(conf?h("div",{className:"row",style:{marginTop:8}},h("button",{className:"btn",onClick:()=>{ww(["at"],Date.now(),0);ww(["by"],myName,0);ww(["est"],"Entregado",0);setConf(false);}},"Sí, entregar ahora"),h("button",{className:"btn alt",onClick:()=>setConf(false)},"Cancelar"))
+    :!ab&&!isAdmin?h("p",{className:"sm",style:{color:"var(--kot)",fontWeight:600}},"El proyecto cerró sin que la entrega se marcara. Si hubo una causa justificada, hablen con la docente.")
+    :lead||isAdmin?(conf?h("div",{className:"row",style:{marginTop:8}},venc?h("p",{className:"sm",style:{color:"var(--kot)",fontWeight:600,flexBasis:"100%"}},"El plazo venció el "+fcorta(vx)+": la entrega quedará registrada con "+Math.max(1,Math.ceil((Date.now()-vx)/864e5))+" día(s) de retraso."):null,h("button",{className:"btn",onClick:()=>{ww(["at"],Date.now(),0);ww(["by"],myName,0);ww(["est"],"Entregado",0);setConf(false);}},"Sí, entregar ahora"),h("button",{className:"btn alt",onClick:()=>setConf(false)},"Cancelar"))
      :h("button",{className:"btn",style:{marginTop:8},disabled:!ready,onClick:()=>setConf(true)},ready?"Marcar como entregada":"Completen la lista para entregar"))
     :h("p",{className:"sm mut"},"El Director General marca la entrega cuando la lista esté completa."),
    h("p",{className:"sm"},"Después, ",h("b",null,"cada integrante descarga el PDF")," de abajo y lo sube a Brightspace."),

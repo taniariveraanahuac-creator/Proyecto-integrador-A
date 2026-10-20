@@ -288,9 +288,14 @@ function escribir_(yo, ops) {
       if (/^teams\/\d+$/.test(p)) dat = yo.rol === "docente" ? (function (x) { x = JSON.parse(JSON.stringify(x)); delete x.mem; return x; })(dat) : limpiarAlumno_(dat);
       var actual = cambios.hasOwnProperty(p) ? cambios[p] : (t.filas[p] ? parse_(t.filas[p].json) : null), d;
       if (yo.rol !== "docente") {
-        // Entregas: solo se editan dentro del plazo (fecha límite o prórroga); la prórroga solo la pone la docente.
+        // Entregas: se editan hasta el cierre general del proyecto (fecha de la S8 o prórroga posterior).
+        // Pasada la fecha límite de la semana queda VENCIDA: se acepta, pero el servidor deja evidencia
+        // (_venc = primera edición tardía) y sella la hora real de entrega para calcular el retraso.
         var mw = /^teams\/\d+\/w\/(\d+)$/.exec(p);
-        if (mw) { if (!plazoAbierto_(Number(mw[1]), actual)) { negadas.push(p); return; } dat = JSON.parse(JSON.stringify(dat)); delete dat.ext; dat._at = Date.now(); dat._by = firma_(t, cambios, yo);
+        if (mw) { var wi_ = Number(mw[1]); if (!plazoAbierto_(wi_, actual)) { negadas.push(p); return; } dat = JSON.parse(JSON.stringify(dat)); delete dat.ext; delete dat._venc; delete dat._vencBy; dat._at = Date.now(); dat._by = firma_(t, cambios, yo);
+          if (dat.hasOwnProperty("at")) dat.at = Date.now();
+          if (dat.est === "Entregado") { dat.at = Date.now(); dat.by = dat._by; }
+          if (Date.now() > venceMs_(wi_, actual) && !(actual && actual._venc)) { dat._venc = Date.now(); dat._vencBy = dat._by; }
           // Aportes por rol: cada integrante solo escribe el recuadro de SU rol directivo.
           if (esObj_(dat.rol)) { var tp = "teams/" + yo.a.eq, td = cambios.hasOwnProperty(tp) ? cambios[tp] : (t.filas[tp] ? parse_(t.filas[tp].json) : null), rs = (td && td.roles) || {};
             Object.keys(dat.rol).forEach(function (k) { if (!yo.a.id || rs[k] !== yo.a.id) { delete dat.rol[k]; negadas.push(p + "#rol"); } }); } }
@@ -327,12 +332,18 @@ function guardar_(t, cambios) {
   if (nuevas.length) t.sh.getRange(t.sh.getLastRow() + 1, 1, nuevas.length, 4).setValues(nuevas);
 }
 
-/* ¿Sigue abierta la semana i? Fecha límite a las 23:59 de Cancún (UTC-5) o la prórroga del documento. */
-function plazoAbierto_(i, d) {
-  if (!LIMITES[i]) return true;
+/* Fecha límite de la semana i: 23:59 de Cancún (UTC-5) o la prórroga del documento. */
+function venceMs_(i, d) {
+  if (!LIMITES[i]) return Infinity;
   var lim = new Date(LIMITES[i] + "T23:59:59-05:00").getTime();
   if (d && d.ext && /^\d{4}-\d{2}-\d{2}$/.test(d.ext)) lim = Math.max(lim, new Date(d.ext + "T23:59:59-05:00").getTime());
-  return Date.now() <= lim;
+  return lim;
+}
+/* ¿Se puede seguir capturando la semana i? Sí, hasta el cierre general (fecha de la S8) o una prórroga posterior. */
+function plazoAbierto_(i, d) {
+  if (!LIMITES[i]) return true;
+  var cierre = new Date(LIMITES[LIMITES.length - 1] + "T23:59:59-05:00").getTime();
+  return Date.now() <= Math.max(venceMs_(i, d), cierre);
 }
 /* Nombres de organización normalizados para comparar ("Café Ñ" = "cafe-n"). */
 function slug_(n) { return String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
@@ -634,9 +645,9 @@ function generarResumen() {
     var rolesDe = function (id) { return Object.keys(tm.roles || {}).filter(function (r) { return tm.roles[r] === id; }).map(function (r) { return ROL[r] || r; }); };
     var el = tm.elegida && al[tm.elegida] && al[tm.elegida].n ? al[tm.elegida] : (tm.org && tm.org.n ? tm.org : null);
     var est = LIMITES.map(function (lim, i) {
-      var w = D["teams/" + n + "/w/" + i] || {}, fin = new Date(lim + "T23:59:59");
-      if (w.est === "Entregado") return w.at && w.at > fin.getTime() ? "Tarde" : "Entregado";
-      return hoy > fin ? "No entregado" : "Pendiente";
+      var w = D["teams/" + n + "/w/" + i] || {}, fin = venceMs_(i, w);
+      if (w.est === "Entregado") return w.at && w.at > fin ? "Tarde (" + Math.ceil((w.at - fin) / 864e5) + " d)" : "Entregado";
+      return hoy.getTime() > fin ? (plazoAbierto_(i, w) ? "Vencida" : "No entregado") : "Pendiente";
     });
     var cal = PESOS.map(function (p, i) { var v = parseFloat(gr.c && gr.c[i]); return isNaN(v) ? "" : v; });
     var pts = cal.reduce(function (s, v, i) { return s + (v === "" ? 0 : v * PESOS[i]); }, 0) + (isNaN(parseFloat(gr.pitch)) ? 0 : parseFloat(gr.pitch) * PESO_PITCH);
