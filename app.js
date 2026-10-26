@@ -201,7 +201,8 @@ function estado(wd,wi){const lim=dt(W[wi].d).getTime(),vx=vence(wi,wd),pr=vx>lim
   return pr&&wd.at&&wd.at>lim?{k:"ok",l:"Entregado con prórroga",c:"ok",s:"✓"}:{k:"ok",l:"Entregado",c:"ok",s:"✓"};}
  if(Date.now()>vx)return abierta(wi,wd)?{k:"no",l:"Vencida · sin entregar (aún se puede entregar con retraso)",c:"ko",s:"✗"}:{k:"no",l:"No entregado",c:"ko",s:"✗"};
  return {k:"pend",l:pr&&Date.now()>lim?"Pendiente · prórroga al "+fcorta(vx):"Pendiente",c:pr&&Date.now()>lim?"wa":"",s:"·"};}
-function score(gr){let p=0;W.forEach((w,i)=>{const c=parseFloat(gr&&gr.c&&gr.c[i]);if(!isNaN(c))p+=c*w.v;});const pi=parseFloat(gr&&gr.pitch);if(!isNaN(pi))p+=pi*PITCHW;return p;}
+/* Con wd (entregas del equipo) aplica la penalización por retraso: 10 puntos sobre 100 (= 1 sobre 10) por semana. */
+function score(gr,wd){let p=0;W.forEach((w,i)=>{let c=parseFloat(gr&&gr.c&&gr.c[i]);if(!isNaN(c)){if(wd)c=Math.max(0,c-10*PENAL*semRetraso(i,wd[i]||{}));p+=c*w.v;}});const pi=parseFloat(gr&&gr.pitch);if(!isNaN(pi))p+=pi*PITCHW;return p;}
 const csvq=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
 
 const empOfTeam=tm=>{const id=tm&&tm.elegida,a=id&&tm.alts&&tm.alts[id];if(a&&!a.del&&str(a.n).trim())return a;const o=tm&&tm.org;return o&&str(o.n).trim()?o:null;};
@@ -822,6 +823,7 @@ const PASOS_EQUIPO=[
  ["Sigan la ruta de «Mi equipo»","Cinco pasos para elegir la organización: asumir roles; el CEO hace el sorteo de las alternativas A y B y el equipo propone la C; contactar a las tres; compararlas con la matriz ponderada y el análisis cualitativo; elegir una y justificarla."],
  ["Capturen cada semana (S1 a S8)","Abran la pestaña de la semana, lean el objetivo y el ejemplo, y llenen las 5 secciones del formato estándar. Todo se guarda solo mientras escriben y lo ve el resto del equipo en segundos."],
  ["Escribe desde tu rol directivo","En «Perspectiva de cada rol directivo», cada integrante responde la pregunta de su rol (CEO, COO, CFO, CMO, CHRO o CIO). Solo tú puedes escribir en tu recuadro; aparece en el PDF y la docente lo evalúa."],
+ ["Calificación y retrasos","Cada semana la docente califica al equipo con la rúbrica y evalúa de 0 a 10 el aporte de cada rol. Tu calificación individual combina las dos (70% equipo y 30% tu aporte). Por cada semana o fracción de retraso se resta 1 punto (sobre 10). Abre «📘 Ejemplo» en tu recuadro para ver cómo hacer el análisis de tu rol."],
  ["Completen el perfil de su organización (desde la S3)","En «Mi equipo» → «🏢 Perfil de la organización», registren la misión, visión, valores, filosofía empresarial, estructura y organigrama, políticas y normas de su organización: si la organización los tiene, los integran indicando de dónde salieron; si no, los proponen y explican en qué se basaron (cada elemento trae guía y ejemplo). Es obligatorio desde la S3, aparece en los documentos de la S3, del proyecto final y en el reporte, y pueden actualizarlo hasta el cierre del proyecto."],
  ["Entreguen antes de cada fecha límite (23:59)","Cuando la lista de verificación esté completa, el CEO presiona «Marcar como entregada». Después de la fecha límite la semana queda VENCIDA: todavía pueden capturar y entregar hasta el cierre del proyecto (fecha de la S8), pero la entrega queda registrada como tardía con los días de retraso."],
  ["Descarguen el PDF y súbanlo a Brightspace","En «Documento de entrega», cada integrante descarga el PDF de la semana y lo sube a Brightspace. «Reporte» reúne las 8 entregas."],
@@ -833,7 +835,7 @@ function pasosDocente(){const B=window.PI_BACKEND,art=B.mode==="artifact",sh=B.m
  ["Comparte la liga",sh?"Panel docente → «Compartir con los alumnos»: código QR para proyectar en clase y botón para enviar la liga por WhatsApp.":art?"Comparte el artefacto con tus alumnos desde el menú «Compartir» de la página (con permiso para usarlo). Sin la clave de su equipo no pueden entrar a nada.":"Publica la página en GitHub para tener una liga que compartir."],
  ["Verifica que cada equipo se registre","En «Inicio» (vista docente) ves cuántos integrantes tiene cada equipo; en el Panel, la lista «Sin equipo» del grupo. Puedes abrir un equipo y agregar o quitar integrantes."],
  ["Supervisa el avance semanal","Panel docente → «Tablero de entregas»: estado S1 a S8 de cada equipo, semana en curso, sorteo de organizaciones y organizaciones elegidas (con «Reabrir selección» o «Liberar para resortear» si hace falta)."],
- ["Revisa y califica cada entrega","En el tablero, «Abrir» el equipo → pestaña de la semana. Marca el nivel de cada criterio de la rúbrica, el desempeño de cada rol directivo y escribe tu comentario. Si se justifica, da «Prórroga para este equipo»."],
+ ["Revisa y califica cada entrega","En el tablero, «Abrir» el equipo → pestaña de la semana. Marca el nivel de cada criterio de la rúbrica, el desempeño de cada rol directivo y escribe tu comentario. Si se justifica, da «Prórroga para este equipo». En «Perspectiva de cada rol directivo», cada alumno tiene un recuadro «📝 Evaluación de la docente»: elige el nivel o escribe los puntos (0 a 10) y un comentario. La penalización de 1 punto por semana de retraso se aplica sola. En «Reportes» → «Por alumno» obtienes la calificación individual de cada semana y su promedio (PDF o CSV)."],
  ["Evalúa por rol directivo","Panel docente → «Evaluación por rol directivo»: quién tiene cada rol, cuántas semanas aportó y su nivel promedio. Úsalo para la retroalimentación individual y cruzada."],
  ["Genera reportes","Pestaña «Reportes»: por semana (lo que se pidió y lo que entregó cada equipo), del grupo o por equipo, en PDF o CSV. Captura la calificación del pitch en «Calificaciones y nota final»."],
  ["Cuida la seguridad y respalda","Si una clave se filtra o la olvidan, usa «Nueva clave»: la anterior deja de funcionar y el trabajo se conserva. Descarga un respaldo en «Respaldo de datos» y presiona «Cerrar sesión» al terminar."]];}
@@ -1018,6 +1020,11 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h("p",{className:"sm mut"},"Vista previa del formato estándar con lo que han capturado."),
    h("div",{ref:doc,style:{marginTop:10,border:"1px solid var(--line)",borderRadius:8,padding:16,background:"var(--card)"}},h(DocEntrega,{wi,t,tm,wd}))),
   h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"Rúbrica y retroalimentación"),h("span",{className:"pill "+(str(gr&&gr.c&&gr.c[wi])?"ok":"")},(str(gr&&gr.c&&gr.c[wi])||"·")+" / 100")),
+   (()=>{const b=califBase(gr,wi),n=semRetraso(wi,wd||{}),f=califEq(gr,wi,wd||{});
+    return h("div",{className:"kpi",style:{margin:"8px 0"}},h("div",null,h("b",null,b==null?"—":r1(b).toFixed(1)),"Rúbrica (sobre 10)"),
+     h("div",{className:n?"ko":""},h("b",null,n?"−"+(n*PENAL):"0"),n?"Retraso: "+n+" semana"+(n>1?"s":"")+" × "+PENAL+" punto":"Sin retraso"),
+     h("div",null,h("b",null,f==null?"—":f.toFixed(1)),"Calificación de la semana (sobre 10)"));})(),
+   h("p",{className:"sm mut"},"Se resta "+PENAL+" punto (sobre 10) por cada semana o fracción de retraso respecto a la fecha límite"+(isAdmin?"; si das prórroga, el retraso se cuenta desde la prórroga.":".")),
    h("div",{className:"ex",style:{margin:"8px 0"}},h("p",{className:"sm"},h("b",null,"Esta semana se busca · herramienta: "),FOCO[wi][0]),h("p",{className:"sm"},h("b",null,"Evidencia: "),FOCO[wi][1])),
    isAdmin?h("p",{className:"sm mut"},"Elige el nivel de cada criterio; los puntos se calculan solos. Si el trabajo queda entre dos niveles, ajusta los puntos a mano."):h("p",{className:"sm mut"},"Así se evalúa cada entrega. El nivel marcado es el que asignó la docente."),
    RUB.map(([key,l,mx,dsc,comp,lv])=>{const v=str(rb[key]),ni=nivelDe(mx,v);
@@ -1049,17 +1056,31 @@ function EntregableFinal({wd,ww,canEdit,setView}){
 
 /* ---------- Aportes por rol directivo (cada integrante escribe desde su rol) ---------- */
 function AportesRol({wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
- const ra=rolesAsumidos(tm),ev=(gr&&gr.rl&&gr.rl[wi])||{};
+ const ra=rolesAsumidos(tm),ev=(gr&&gr.rl&&gr.rl[wi])||{},pen=semRetraso(wi,wd||{});
  return h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"🎯 Perspectiva de cada rol directivo"),canEdit?h(AutoGuardado):null),
-  h("p",{className:"sm mut"},"Cada integrante responde desde su dirección: qué ve, qué propone y qué decide su área en esta entrega. Solo quien tiene el rol escribe en su recuadro; los demás lo leen. Aparece en el PDF (sección 4.1)."),
+  h("p",{className:"sm mut"},"Cada integrante responde desde su dirección: qué ve, qué propone y qué decide su área en esta entrega. Solo quien tiene el rol escribe en su recuadro; los demás lo leen. Aparece en el PDF (sección 4.1). Abre «📘 Ejemplo» para ver cómo se hace el análisis de tu rol. La docente evalúa cada aporte de 0 a 10."),
   !ra.length?h("p",{className:"pill wa",style:{whiteSpace:"normal"}},"Aún no hay roles asumidos. Asígnenlos en «Mi equipo» → paso 1."):null,
-  ra.map(([r,id,nm])=>{const mio=id===me,v=str(wd&&wd.rol&&wd.rol[r.k]),lv=ev[r.k];
+  ra.map(([r,id,nm])=>{const mio=id===me,v=str(wd&&wd.rol&&wd.rol[r.k]),lv=ev[r.k],pts=rolPts(gr,wi,r.k),rp=str(gr&&gr.rp&&gr.rp[wi]&&gr.rp[wi][r.k]),cm=str(gr&&gr.rc&&gr.rc[wi]&&gr.rc[wi][r.k]),ej=EJ_ROL[wi]&&EJ_ROL[wi][r.k];
+   const nivel=i=>{wg(["rl",String(wi),r.k],lv===i?"":i);wg(["rp",String(wi),r.k],lv===i?"":String(NIV[i][1]*10));};
    return h("div",{key:r.k,style:{borderTop:"1px solid var(--line)",padding:"10px 0"}},
     h("div",{className:"bar"},h("b",null,r.a+" · "+r.n.replace(/ \(.*\)$/,"")),h("span",{className:"pill "+(v.trim().length>=40?"ok":"wa")},nm+(mio?" (tú)":""))),
-    h(Field,{id:"rol"+wi+r.k,l:r.p,area:true,ro:!(isAdmin||(canEdit&&mio)),v,on:x=>ww(["rol",r.k],x),ph:mio?"Escribe como "+r.a+": tu análisis, tu propuesta y tu decisión para esta entrega.":"Lo escribe "+nm+"."}),
-    isAdmin?h("div",{className:"row",role:"group","aria-label":"Nivel del aporte "+r.a,style:{marginTop:6}},h("span",{className:"sm mut"},"Desempeño del rol:"),
-     NIV.map(([nl],i)=>h("button",{key:nl,className:"btn sm "+(lv===i?"":"alt"),"aria-pressed":lv===i,onClick:()=>wg(["rl",String(wi),r.k],lv===i?"":i)},nl)))
-    :typeof lv==="number"?h("p",{className:"sm",style:{marginTop:6}},h("b",null,"Desempeño del rol según la docente: "),NIV[lv][0]):null);}));
+    ej?h("details",{className:"ex",style:{margin:"6px 0"}},h("summary",{className:"sm"},"📘 Ejemplo de cómo hacer tu análisis como "+r.a),
+     h("p",{className:"sm",style:{margin:"8px 0 4px"}},h("b",null,"Estructura: "),EJ_GUIA),
+     h("p",{className:"sm",style:{margin:0,fontStyle:"italic"}},h("b",{style:{fontStyle:"normal"}},"Ejemplo (Hotel Arrecife, caso ficticio): "),ej),
+     h("p",{className:"sm mut",style:{margin:"6px 0 0"}},"[__] = dato que deben buscar o calcular para su organización. No copien el ejemplo: úsenlo como guía con los datos reales de su organización.")):null,
+    h(Field,{id:"rol"+wi+r.k,l:r.p,area:true,ro:!(isAdmin||(canEdit&&mio)),v,on:x=>ww(["rol",r.k],x),ph:mio?"Escribe como "+r.a+": qué ves, qué significa para tu área y qué propones o decides.":"Lo escribe "+nm+"."}),
+    h("div",{style:{marginTop:8,padding:"8px 12px",border:"1px dashed var(--or)",borderRadius:8,background:"var(--soft)"}},
+     h("div",{className:"bar"},h("b",{className:"sm"},"📝 Evaluación de la docente · "+nm),
+      h("span",{className:"pill "+(pts==null?"":pts>=8?"ok":pts>=6?"wa":"ko")},pts==null?"Sin evaluar":"Aporte: "+r1(pts).toFixed(1)+" / 10")),
+     isAdmin?h("div",null,
+      h("div",{className:"row",role:"group","aria-label":"Nivel del aporte "+r.a,style:{marginTop:6}},h("span",{className:"sm mut"},"Nivel:"),
+       NIV.map(([nl,f],i)=>h("button",{key:nl,className:"btn sm "+(lv===i?"":"alt"),"aria-pressed":lv===i,onClick:()=>nivel(i)},nl+" · "+(f*10)))),
+      h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},
+       h("label",{className:"sm",style:{display:"grid",gap:2}},"Puntos (0 a 10)",h("input",{type:"number",min:0,max:10,step:.5,value:rp!==""?rp:(pts==null?"":String(pts)),style:{width:90},onChange:e=>wg(["rp",String(wi),r.k],e.target.value)})),
+       h("div",{style:{flex:"1 1 260px"}},h(Field,{id:"rc"+wi+r.k,l:"Comentario para "+nm,area:true,v:cm,on:x=>wg(["rc",String(wi),r.k],x),ph:"Qué hizo bien y qué debe mejorar en su análisis."}))))
+     :h("div",{className:"sm",style:{marginTop:4}},typeof lv==="number"?h("p",{style:{margin:"2px 0"}},h("b",null,"Nivel: "),NIV[lv][0]):null,
+       cm?h("p",{style:{margin:"2px 0",whiteSpace:"pre-wrap"}},h("b",null,"Comentario: "),cm):pts==null?h("p",{className:"mut",style:{margin:"2px 0"}},"Pendiente de evaluación."):null),
+     (()=>{const ci=califInd(tm,gr,wi,wd||{},id);return ci?h("p",{className:"sm",style:{margin:"6px 0 0"}},h("b",null,"Calificación individual de la semana: "+ci.v.toFixed(1)+" / 10"),ci.parcial?" (falta evaluar el aporte; por ahora es la del equipo)":"",pen?" · incluye "+txtPen(wi,wd||{}):""):null;})()));}));
 }
 
 /* ---------- Reporte del proyecto ---------- */
@@ -1236,32 +1257,137 @@ function Sorteo({teams,sorteo,isAdmin,me,team,drawAB,releaseDraw,reassign,reques
    h("p",{className:"sm mut"},isAdmin?"○ libre · ● asignada. Las fuentes de cada organización están en «Organizaciones».":"● asignada a su equipo. Las fuentes de cada organización están en «Organizaciones».")));
 }
 
+/* ---------- Ejemplos de análisis por rol directivo y semana ----------
+   Caso ficticio del Hotel Arrecife Cancún (el mismo de los ejemplos de cada semana).
+   [__] = dato que el equipo debe buscar o calcular para SU organización. */
+const EJ_GUIA="1) Qué veo: un hallazgo o dato concreto de la organización (con su fuente). 2) Qué significa para mi área. 3) Qué propongo o decido, con una cifra o meta cuando se pueda.";
+const EJ_ROL=[
+ {dg:"Analizamos tres alternativas y elegimos el Hotel Arrecife Cancún: obtuvo 82/100 en la matriz ponderada y su gerente aceptó colaborar por escrito. Como CEO decido que trabajaremos el tiempo de espera en el restaurante y asigno a cada director qué información debe pedir en la primera visita.",
+  op:"En la visita observé que el restaurante atiende unos 300 comensales al día con 12 meseros y que en horas pico la espera es de 25 minutos. Para Operaciones es un proceso que sí podemos medir, por eso apoyo elegir esta organización. Propongo cronometrar el servicio durante una semana.",
+  fi:"El hotel aceptó compartir las ventas mensuales del restaurante y el costo de su nómina, así que podremos calcular inversión y retorno. Riesgo: si no comparten costos, usaremos estimaciones del sector. Recomiendo elegirla porque tiene información financiera disponible.",
+  mk:"Revisé las reseñas del último año en Google y TripAdvisor: la mayoría de las negativas mencionan la espera en el restaurante y la calificación bajó de 4.6 a 4.2. Sus clientes son familias nacionales y estadounidenses. Para Marketing es una oportunidad clara de mejorar la reputación.",
+  rh:"El hotel tiene 220 colaboradores y, según el gerente, una rotación de meseros cercana al 35% anual. Desde Capital Humano veo que el problema de servicio también es de personas, lo que hace el caso más completo. Propongo entrevistar al jefe de personal sobre la capacitación.",
+  in:"Hoy las comandas se escriben en papel y se llevan caminando a la cocina. Veo una oportunidad de innovación con comandas digitales en tableta, y la dirección se mostró abierta a probar tecnología. Por eso considero viable nuestra propuesta de mejora aquí."},
+ {dg:"El factor más relevante del PESTEL es el económico: la ocupación hotelera de Cancún fue de [__]% en [año] (DATATUR). El consejo decide enfocar la mejora en la experiencia del restaurante del turista nacional, que es donde el entorno ofrece más oportunidad.",
+  op:"Factor legal: la NOM-251-SSA1-2009 obliga a llevar controles de higiene que hoy se registran en papel y retrasan a la cocina. Factor tecnológico: proveedores locales ya ofrecen sistemas de comandas. Para Operaciones, podemos digitalizar sin dejar de cumplir la norma.",
+  fi:"Factor económico: la inflación de alimentos fue de [__]% (INEGI) y sube el costo por platillo. Mercado: [__] huéspedes al año × $[__] de gasto promedio en restaurante = $[__] (TAM). Riesgo: si baja el tipo de cambio, disminuye el gasto del turista extranjero.",
+  mk:"Nuestro mercado objetivo son familias nacionales de nivel medio alto que se hospedan cuatro noches. Comparé tres competidores de la zona hotelera: dos ya permiten reservar mesa desde una app. Para Marketing, esperar 25 minutos nos deja en desventaja frente a ellos.",
+  rh:"Factor social: en Cancún hay mucha demanda de personal turístico y los meseros cambian de hotel por pequeñas diferencias de sueldo, lo que explica la rotación. Para Capital Humano, cualquier mejora debe incluir capacitación rápida y un plan para retener al personal.",
+  in:"Factor tecnológico: casi todos los huéspedes usan el celular durante su estancia (lo verificaremos con la encuesta del hotel). Existen menús QR y comandas en la nube de bajo costo. Propongo buscar una solución que se conecte con el punto de venta que ya usan."},
+ {dg:"De las 5 fuerzas, la más intensa es la rivalidad entre los hoteles todo incluido de la zona. Nuestra ventaja competitiva debe ser el servicio. El consejo decide que la mejora reforzará la ventaja de «servicio ágil y cálido» y no competirá por precio.",
+  op:"Poder de los proveedores: medio, porque hay muchos proveedores de alimentos en Cancún. Amenaza de sustitutos: alta, el huésped puede salir a cenar fuera del hotel. Desde Operaciones, bajar la espera de 25 a 12 minutos ayuda a que no busque sustitutos.",
+  fi:"Poder de negociación de los clientes: alto, comparan precios en línea. Cada huésped que deja de cenar en el hotel son unos $[__] menos. Si la espera baja, estimamos recuperar [__] cenas diarias, $[__] al mes, lo que justifica invertir en la mejora.",
+  mk:"Amenaza de nuevos competidores: media, cada temporada abren restaurantes en la zona hotelera. Nuestra ventaja frente a ellos es la comodidad de comer en el hotel. Propongo comunicar el nuevo servicio rápido desde el check-in y en redes sociales.",
+  rh:"La ventaja de servicio depende de las personas: un mesero capacitado atiende más mesas con menos errores. Propongo un programa de 20 horas de capacitación y reconocer al mejor mesero del mes para sostener la ventaja competitiva.",
+  in:"Ninguno de los competidores directos usa comandas digitales en su restaurante principal. Si las combinamos con capacitación, sería una ventaja difícil de copiar a corto plazo. Propongo probarlas primero en el turno de cena."},
+ {dg:"La misión del hotel habla de «experiencias memorables», pero el servicio lento la contradice. Con el FODA elegimos la estrategia FO: aprovechar la buena ubicación (F) y el turismo nacional (O). Objetivo SMART: reducir la espera de 25 a 12 minutos antes de junio de 2027.",
+  op:"Debilidad: comandas en papel. Fortaleza: la cocina tiene capacidad suficiente. Objetivo SMART de Operaciones: entregar cada orden en máximo 12 minutos en el 90% de los casos para el segundo trimestre de 2027, medido con el sistema de comandas.",
+  fi:"Objetivo SMART financiero: aumentar 8% las ventas de alimentos y bebidas en 12 meses con una inversión máxima de $450,000. Amenaza: el alza de costos de insumos. Es medible con los reportes mensuales de ventas del hotel.",
+  mk:"Oportunidad: crecimiento del turismo nacional. Amenaza: reseñas negativas visibles. Objetivo SMART: subir la calificación del restaurante en Google de 4.2 a 4.5 en nueve meses. La visión del hotel de ser «el preferido de las familias» lo respalda.",
+  rh:"Debilidad: rotación de meseros cercana al 35%. Objetivo SMART: bajarla al 25% en 12 meses con capacitación y reconocimiento. El valor de «trabajo en equipo» del hotel debe notarse en cómo se reparten las mesas.",
+  in:"Fortaleza: la dirección está abierta a la tecnología. Objetivo SMART: tener las comandas digitales funcionando en el restaurante principal en cuatro meses, con el 100% del personal capacitado. Propongo que la visión incluya un «servicio ágil y digital»."},
+ {dg:"Al comparar los dos Canvas, la mejora cambia la propuesta de valor de «buffet frente al mar» a «buffet frente al mar sin esperas». El consejo decide que los bloques que más cambian son actividades clave y recursos clave.",
+  op:"Actividades clave actuales: tomar la orden en papel, llevarla a cocina, preparar y servir. Con la mejora: la orden llega en digital a la cocina y un coordinador organiza el servicio. Recursos clave nuevos: 12 tabletas y el software de comandas.",
+  fi:"Estructura de costos con la mejora: $450,000 de inversión inicial y $[__] mensuales de licencia. Fuentes de ingreso: +8% en consumo de alimentos y bebidas. Según nuestros cálculos, el margen del restaurante pasaría de [__]% a [__]%.",
+  mk:"Segmento: familias nacionales y extranjeras. Relación con el cliente: hoy es solo presencial; con la mejora agregamos una encuesta digital al pagar. Canal: el huésped conoce el restaurante en el check-in; proponemos un aviso en la app del hotel.",
+  rh:"Recursos clave humanos: 12 meseros y un coordinador de servicio nuevo. Actividad clave: capacitar en el uso del sistema. Socio clave: el proveedor del software, que capacita al personal durante las dos primeras semanas.",
+  in:"Socio clave nuevo: el proveedor de comandas digitales. La innovación está en la propuesta de valor: el huésped puede ver el tiempo estimado de su orden. Propongo que este sea el diferenciador del pitch."},
+ {dg:"La estructura actual es funcional: el gerente de alimentos y bebidas dirige dos restaurantes y 30 personas, un tramo de control muy amplio. Decidimos proponer un coordinador de servicio que reporte al gerente y supervise a los meseros.",
+  op:"Hoy los meseros reportan directo al gerente, que además atiende a los proveedores. Con el coordinador, el tramo de control del gerente baja de 30 a 8 personas y las decisiones en el piso se toman en minutos.",
+  fi:"El nuevo puesto de coordinador cuesta $[__] al mes con prestaciones y se paga con [__] cenas adicionales al mes. Desde Finanzas apruebo el cambio si se mide el aumento de ventas en los primeros tres meses.",
+  mk:"Con el coordinador, el cliente tendrá una persona responsable de resolver sus quejas en la mesa. Propongo que el organigrama indique quién atiende las reseñas en línea, porque hoy nadie se encarga de ellas.",
+  rh:"Describo el puesto de coordinador de servicio: objetivo, funciones, perfil (dos años de experiencia e inglés intermedio) y a quién reporta. Propongo cubrirlo con un mesero actual para motivar al equipo.",
+  in:"En el organigrama propuesto agregamos el soporte del área de sistemas para el nuevo sistema de comandas, una función que hoy no existe en alimentos y bebidas."},
+ {dg:"El consejo decide que la mejora solo funcionará si el personal la adopta. Aprobamos un plan de talento con reclutamiento del coordinador, 20 horas de capacitación y evaluación trimestral del desempeño.",
+  op:"La capacitación debe darse en horarios de baja ocupación, de 15:00 a 17:00, para no afectar el servicio. Propongo medir la espera antes y después de la capacitación para comprobar el efecto.",
+  fi:"Costo del plan: 13 personas × $[__] de capacitación = $[__], incluido en la inversión total. Ahorro esperado: menos rotación, porque reemplazar a un mesero cuesta alrededor de $[__] entre reclutamiento y capacitación.",
+  mk:"Propongo capacitar también en atención al cliente y manejo de quejas, porque las reseñas mencionan trato poco amable cuando hay espera. Mediremos el resultado con la encuesta digital al pagar.",
+  rh:"Reclutamiento: publicar primero la vacante de coordinador de forma interna. Capacitación: 20 horas por persona en uso de tabletas, servicio y trabajo en equipo. Evaluación del desempeño: tiempo de atención y calificación del cliente cada trimestre.",
+  in:"Propongo un video tutorial de cinco minutos para aprender a usar las tabletas y un tablero que muestre a cada mesero su tiempo promedio de atención, para que la tecnología apoye la capacitación."},
+ {dg:"Resumen ejecutivo: el restaurante del Hotel Arrecife pierde clientes por 25 minutos de espera. Proponemos comandas digitales y un coordinador de servicio, con inversión de $450,000 y retorno de 118% el primer año. Pedimos a la dirección aprobar una prueba piloto de tres meses.",
+  op:"Plan de implementación: mes 1, compra e instalación; mes 2, capacitación; mes 3, arranque y medición. Indicador clave: espera de 12 minutos o menos. Responsables: el gerente de alimentos y bebidas con el coordinador de servicio.",
+  fi:"Inversión: $450,000. Beneficio estimado: $980,000 en el primer año. Retorno: 118%. Recuperación de la inversión: [__] meses. Riesgo principal: que el personal tarde en adoptar el sistema; lo reducimos con la prueba piloto.",
+  mk:"Perspectiva del cliente del Balanced Scorecard: calificación de 4.5 o más y 90% de clientes satisfechos. En el pitch abriremos con la reseña real de un huésped molesto para mostrar el problema.",
+  rh:"Perspectiva de aprendizaje y crecimiento: 20 horas de capacitación por persona y rotación menor al 25%. En el pitch mostraremos cómo el plan de talento sostiene la mejora.",
+  in:"Guion del pitch de 15 minutos: 1) el problema con datos, 2) la propuesta con una demostración de la comanda digital, 3) los números, 4) el plan, 5) la petición a la dirección. Preparo las diapositivas y el video de la demostración."}];
+
+/* ---------- Calificación semanal con penalización por retraso ----------
+   Escala 0 a 10. Cada semana (o fracción) de retraso resta PENAL puntos. La prórroga de la docente
+   corre la fecha límite, así que el retraso se cuenta desde la prórroga.
+   Individual = PESO_EQUIPO de la calificación del equipo (rúbrica) + PESO_ROL de la evaluación de su aporte
+   como rol directivo (si aún no se evalúa el aporte, se usa solo la del equipo), menos la penalización. */
+const PENAL=1,PESO_ROL=.3,PESO_EQUIPO=1-PESO_ROL;
+const semRetraso=(wi,wd)=>{const vx=vence(wi,wd),ref=wd&&wd.est==="Entregado"?(wd.at||0):Date.now();return ref>vx?Math.ceil((ref-vx)/(7*864e5)):0;};
+const r1=x=>Math.round(x*10)/10;
+const califBase=(gr,wi)=>{const c=parseFloat(gr&&gr.c&&gr.c[wi]);return isNaN(c)?null:c/10;};
+/* Calificación del equipo en la semana (0 a 10), ya con la penalización. */
+const califEq=(gr,wi,wd)=>{const b=califBase(gr,wi);return b==null?null:Math.max(0,r1(b-PENAL*semRetraso(wi,wd)));};
+/* Evaluación del aporte de un rol (0 a 10): número capturado o, si solo se marcó el nivel, su equivalente. */
+const rolPts=(gr,wi,k)=>{const v=parseFloat(gr&&gr.rp&&gr.rp[wi]&&gr.rp[wi][k]);if(!isNaN(v))return v;const l=gr&&gr.rl&&gr.rl[wi]&&gr.rl[wi][k];return typeof l==="number"&&NIV[l]?NIV[l][1]*10:null;};
+/* Calificación individual (0 a 10) de un integrante en la semana. */
+function califInd(tm,gr,wi,wd,id){const b=califBase(gr,wi);if(b==null)return null;
+ const ks=ROLES.filter(r=>tm&&tm.roles&&tm.roles[r.k]===id).map(r=>r.k),rs=ks.map(k=>rolPts(gr,wi,k)).filter(x=>x!=null);
+ const base=rs.length?PESO_EQUIPO*b+PESO_ROL*(rs.reduce((s,x)=>s+x,0)/rs.length):b;
+ return {v:Math.max(0,r1(base-PENAL*semRetraso(wi,wd))),parcial:!rs.length};}
+/* Promedio ponderado (0 a 10) con los pesos de cada semana, solo de las semanas ya calificadas. */
+const promPond=vals=>{let s=0,p=0;vals.forEach((v,i)=>{if(v!=null){s+=v*W[i].v;p+=W[i].v;}});return p?r1(s/p):null;};
+const txtPen=(wi,wd)=>{const n=semRetraso(wi,wd);return n?"−"+(n*PENAL)+" ("+n+" semana"+(n>1?"s":"")+" de retraso)":"";};
+
+/* ---------- Reporte por alumno (docente) ---------- */
+function filasAlumnos(G,teams,allW,grades){const out=[];
+ [1,2,3,4,5].map(i=>G.off+i).forEach(n=>{const tm=teams[n]||{},gr=grades[n]||{},wd=allW[n]||{};
+  members(tm).forEach(([id,x])=>{const sem=W.map((w,i)=>califInd(tm,gr,i,wd[i]||{},id));
+   out.push({n:x.n,t:n,id,roles:rolesAOf(tm,id).join(", ")||"Sin rol",sem,prom:promPond(sem.map(s=>s&&s.v)),pen:W.map((w,i)=>delivered(wd[i])||califBase(gr,i)!=null?semRetraso(i,wd[i]||{}):0).reduce((a,b)=>a+b,0)});});});
+ return out.sort((a,b)=>a.n.localeCompare(b.n,"es"));}
+function RepAlumnos({G,teams,allW,grades}){
+ const F=filasAlumnos(G,teams,allW,grades);
+ return h("div",null,h(Portada,{tit:"Reporte por alumno · "+G.n,sub:"Calificación individual por semana (0 a 10)"}),
+  h("p",{className:"sm"},"Calificación individual = "+Math.round(PESO_EQUIPO*100)+"% calificación del equipo en la rúbrica + "+Math.round(PESO_ROL*100)+"% evaluación del aporte de su rol directivo, menos "+PENAL+" punto por cada semana de retraso. * = aún no se evalúa el aporte de su rol (se usa solo la calificación del equipo). El promedio pondera cada semana con su valor en el proyecto."),
+  Hs("1. Resumen del grupo"),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Alumno"),h("th",null,"Equipo"),h("th",null,"Rol"),W.map((w,i)=>h("th",{key:i},"S"+(i+1))),h("th",null,"Promedio"),h("th",null,"Semanas de retraso"))),
+   h("tbody",null,F.length?F.map(f=>h("tr",{key:f.t+f.id},h("td",null,f.n),h("td",{className:"c"},loc(f.t)),h("td",{className:"sm"},f.roles),
+    f.sem.map((s,i)=>h("td",{key:i,className:"c "+(s==null?"":s.v>=8?"ok":s.v>=6?"wa":"ko")},s==null?"·":s.v.toFixed(1)+(s.parcial?"*":""))),
+    h("td",{className:"c"},h("b",null,f.prom==null?"—":f.prom.toFixed(1))),h("td",{className:"c "+(f.pen?"wa":"")},f.pen||"0"))):h("tr",null,h("td",{colSpan:12},"Aún no hay alumnos en equipos."))))),
+  Hs("2. Detalle por alumno"),
+  F.map(f=>{const tm=teams[f.t]||{},gr=grades[f.t]||{},wd=allW[f.t]||{},ks=ROLES.filter(r=>tm.roles&&tm.roles[r.k]===f.id);
+   return h("div",{key:f.t+f.id,className:"sec",style:{marginTop:14}},h("h4",{style:{margin:"0 0 4px"}},f.n+" · Equipo "+loc(f.t)+" · "+f.roles+" · Promedio: "+(f.prom==null?"—":f.prom.toFixed(1))),
+    h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Equipo (rúbrica)"),h("th",null,"Aporte del rol"),h("th",null,"Retraso"),h("th",null,"Calificación"),h("th",null,"Comentario del aporte"))),
+     h("tbody",null,W.map((w,i)=>{const b=califBase(gr,i),rp=ks.map(r=>rolPts(gr,i,r.k)).filter(x=>x!=null),s=f.sem[i],cm=ks.map(r=>str(gr.rc&&gr.rc[i]&&gr.rc[i][r.k])).filter(Boolean).join(" · ");
+      return h("tr",{key:i},h("td",{className:"c"},"S"+(i+1)),h("td",{className:"c"},b==null?"·":r1(b).toFixed(1)),h("td",{className:"c"},rp.length?r1(rp.reduce((a,x)=>a+x,0)/rp.length).toFixed(1):"·"),
+       h("td",{className:"c sm"},txtPen(i,wd[i]||{})||"—"),h("td",{className:"c"},h("b",null,s==null?"·":s.v.toFixed(1)+(s.parcial?"*":""))),h("td",{className:"sm"},cm||"—"));})))));}));
+}
+const csvAlumnos=(G,teams,allW,grades)=>"Grupo,Alumno,Equipo,Rol,"+W.map((w,i)=>"S"+(i+1)).join(",")+",Promedio,Semanas de retraso\n"+
+ filasAlumnos(G,teams,allW,grades).map(f=>[G.n,f.n,loc(f.t),f.roles,...f.sem.map(s=>s==null?"":s.v.toFixed(1)+(s.parcial?"*":"")),f.prom==null?"":f.prom.toFixed(1),f.pen].map(csvq).join(",")).join("\n");
+
 /* ---------- Reportes (docente) ---------- */
-const nota=gr=>{const p=score(gr||{});return p?(p/.8).toFixed(1):"—";};
+const nota=(gr,wd)=>{const p=score(gr||{},wd);return p?(p/.8).toFixed(1):"—";};
+/* Celda de calificación /100 con la penalización visible: «85 −10». */
+const cC=(gr,i,wd)=>{const c=str(gr&&gr.c&&gr.c[i]);if(!c)return "·";const n=semRetraso(i,(wd&&wd[i])||{});return n?c+" −"+(10*PENAL*n):c;};
 function RepGrupo({G,teams,allW,grades}){
  const TT=[1,2,3,4,5].map(i=>G.off+i),reg=regMap(G,teams),sin=rosterOf(G).map(fullName).filter(n=>!reg[norm(n)]);
  let ent=0;TT.forEach(n=>W.forEach((w,i)=>{if(delivered((allW[n]||{})[i]))ent++;}));
- const notas=TT.map(n=>score(grades[n]||{})/.8).filter(q=>q>0),prom=notas.length?(notas.reduce((a,b)=>a+b,0)/notas.length).toFixed(1):"—";
+ const notas=TT.map(n=>score(grades[n]||{},allW[n]||{})/.8).filter(q=>q>0),prom=notas.length?(notas.reduce((a,b)=>a+b,0)/notas.length).toFixed(1):"—";
  return h("div",null,h(Portada,{tit:"Reporte del grupo "+G.n,sub:"Cinco equipos · "+G.lista.length+" alumnos en la lista"}),
   Hs("1. Resumen"),
   h("div",{className:"kpi"},h("div",null,h("b",null,Object.keys(reg).length+" / "+G.lista.length),"Alumnos registrados"),h("div",null,h("b",null,TT.filter(n=>empOfTeam(teams[n])).length+" / 5"),"Equipos con organización"),h("div",null,h("b",null,Math.round(ent/40*100)+"%"),"Entregas marcadas"),h("div",null,h("b",null,prom),"Promedio sobre 100")),
   Hs("2. Equipos y organizaciones"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Director General"),h("th",null,"Integrantes"),h("th",null,"Organización"),h("th",null,"Entregas"),h("th",null,"Nota /100"))),
    h("tbody",null,TT.map(n=>{const tm=teams[n]||{},e=empOfTeam(tm),d=W.filter((w,i)=>delivered((allW[n]||{})[i])).length;
-    return h("tr",{key:n},h("td",{className:"c"},loc(n)),h("td",null,nameOf(tm,leaderOf(tm))||"—"),h("td",{className:"c"},members(tm).length),h("td",null,e?h("div",null,h("b",null,e.n),h("div",{className:"sm mut"},[e.tipo,e.acepta?"aceptó: "+e.acepta:""].filter(Boolean).join(" · "))):"—"),h("td",{className:"c"},d+"/8"),h("td",{className:"c"},nota(grades[n])));})))),
+    return h("tr",{key:n},h("td",{className:"c"},loc(n)),h("td",null,nameOf(tm,leaderOf(tm))||"—"),h("td",{className:"c"},members(tm).length),h("td",null,e?h("div",null,h("b",null,e.n),h("div",{className:"sm mut"},[e.tipo,e.acepta?"aceptó: "+e.acepta:""].filter(Boolean).join(" · "))):"—"),h("td",{className:"c"},d+"/8"),h("td",{className:"c"},nota(grades[n],allW[n]||{})));})))),
   Hs("3. Estado de entregas por semana"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),W.map((w,i)=>h("th",{key:i},"S"+(i+1))))),
    h("tbody",null,TT.map(n=>h("tr",{key:n},h("td",{className:"c"},loc(n)),W.map((w,i)=>{const s2=estado((allW[n]||{})[i],i);return h("td",{key:i,className:"c "+s2.c,title:s2.l},s2.s);})))))),
   h("p",{className:"sm mut"},"✓ entregado · Tarde: después de la fecha · ✗ no entregado con plazo vencido · · pendiente."),
   Hs("4. Calificaciones"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),W.map((w,i)=>h("th",{key:i},"E"+(i+1))),h("th",null,"Pitch"),h("th",null,"Puntos /80"),h("th",null,"Sobre 100"))),
-   h("tbody",null,TT.map(n=>{const gr=grades[n]||{},p=score(gr);return h("tr",{key:n},h("td",{className:"c"},loc(n)),W.map((w,i)=>h("td",{key:i,className:"c"},str(gr.c&&gr.c[i])||"·")),h("td",{className:"c"},str(gr.pitch)||"·"),h("td",{className:"c"},p.toFixed(1)),h("td",{className:"c"},h("b",null,(p/.8).toFixed(1))));})))),
+   h("tbody",null,TT.map(n=>{const gr=grades[n]||{},p=score(gr,allW[n]||{});return h("tr",{key:n},h("td",{className:"c"},loc(n)),W.map((w,i)=>h("td",{key:i,className:"c"},cC(gr,i,allW[n]))),h("td",{className:"c"},str(gr.pitch)||"·"),h("td",{className:"c"},p.toFixed(1)),h("td",{className:"c"},h("b",null,(p/.8).toFixed(1))));})))),
+  h("p",{className:"sm mut"},"«−10» = penalización de "+PENAL+" punto (sobre 10) por cada semana de retraso; ya está descontada en los puntos y en la nota."),
   Hs("5. Integrantes y roles"),
   TT.map(n=>{const tm=teams[n]||{},ms=members(tm);return h("p",{key:n},h("b",null,"Equipo "+loc(n)+": "),ms.length?ms.map(([id,x])=>x.n+(rolesOf(tm,id).length?" ("+rolesOf(tm,id).join(", ")+")":"")).join("; "):"sin integrantes");}),
   Hs("6. Alumnos sin equipo"),h("p",null,sin.length?sin.join(", "):"Todos los alumnos tienen equipo."));
 }
 function RepEquipo({t,teams,allW,grades}){
- const tm=teams[t]||{},ms=members(tm),e=empOfTeam(tm),gr=grades[t]||{},wd=allW[t]||{},p=score(gr);
+ const tm=teams[t]||{},ms=members(tm),e=empOfTeam(tm),gr=grades[t]||{},wd=allW[t]||{},p=score(gr,wd);
  return h("div",null,h(Portada,{tit:tLab(t)+(e?" · "+e.n:""),sub:"Reporte del equipo"}),
   Hs("1. Integrantes y roles"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Integrante"),h("th",null,"Rol directivo"))),h("tbody",null,ms.length?ms.map(([id,x])=>h("tr",{key:id},h("td",null,x.n),h("td",null,rolesOf(tm,id).join(", ")||"Sin rol"))):h("tr",null,h("td",{colSpan:2},"Sin integrantes"))))),
@@ -1272,7 +1398,7 @@ function RepEquipo({t,teams,allW,grades}){
   Hs("3. Entregas"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Fecha límite"),h("th",null,"Estado"),h("th",null,"Entregó"),h("th",null,"Lista"),h("th",null,"Calificación"))),
    h("tbody",null,W.map((w,i)=>{const d=wd[i]||{},s2=estado(d,i),[a,b]=cuenta(i,d,tm);return h("tr",{key:i},h("td",null,h("b",null,"S"+(i+1)),h("div",{className:"sm"},w.t)),h("td",{style:{whiteSpace:"nowrap"}},dt(w.d).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})),
-    h("td",{className:s2.c},s2.l),h("td",{className:"sm"},delivered(d)?fmt(d.at)+(d.by?" · "+d.by:""):"—"),h("td",{className:"c"},a+"/"+b),h("td",{className:"c"},(str(gr.c&&gr.c[i])||"·")+" /100"));})))),
+    h("td",{className:s2.c},s2.l),h("td",{className:"sm"},delivered(d)?fmt(d.at)+(d.by?" · "+d.by:""):"—"),h("td",{className:"c"},a+"/"+b),h("td",{className:"c"},cC(gr,i,wd)+" /100",txtPen(i,d)?h("div",{className:"sm mut"},txtPen(i,d)):null));})))),
   Hs("4. Rúbrica y retroalimentación"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),RUB.map(([k,l,mx])=>h("th",{key:k},l+" ("+mx+")")),h("th",null,"Comentario"))),
    h("tbody",null,W.map((w,i)=>{const rb=(gr.r&&gr.r[i])||{};return h("tr",{key:i},h("td",{className:"c"},"S"+(i+1)),RUB.map(([k])=>h("td",{key:k,className:"c"},str(rb[k])||"·")),h("td",{className:"sm"},str(gr.m&&gr.m[i])||"—"));})))),
@@ -1302,23 +1428,23 @@ function Reportes({teams,allW,grades}){
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L"),[sc,setSc]=useState("s"),[wi,setWi]=useState(semanaActual),[full,setFull]=useState(true),box=useRef(null),[msg,setMsg]=useState("");
  const B=window.PI_BACKEND;
  const G=GRUPOS.find(x=>x.k===pg)||GRUPOS[0],t=/^\d$/.test(sc)?G.off+(+sc):0;
- const fname=("PI_ADM1401_"+G.n+(sc==="s"?"_Semana"+(wi+1):t?"_Equipo"+loc(t)+"_"+((empOfTeam(teams[t])||{}).n||""):"_grupo")+"_"+hoyISO()).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_");
+ const fname=("PI_ADM1401_"+G.n+(sc==="s"?"_Semana"+(wi+1):sc==="a"?"_por_alumno":t?"_Equipo"+loc(t)+"_"+((empOfTeam(teams[t])||{}).n||""):"_grupo")+"_"+hoyISO()).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_");
  const TT=[1,2,3,4,5].map(i=>G.off+i);
- const csv=()=>sc==="s"?"Grupo,Semana,Equipo,Organización,Estado,Fecha de entrega,Entregó,Lista de verificación,Calificación,Comentario\n"+TT.map(n=>{const tm=teams[n]||{},d=(allW[n]||{})[wi]||{},[a,b]=cuenta(wi,d,tm),gr=grades[n]||{};
+ const csv=()=>sc==="a"?csvAlumnos(G,teams,allW,grades):sc==="s"?"Grupo,Semana,Equipo,Organización,Estado,Fecha de entrega,Entregó,Lista de verificación,Calificación,Comentario\n"+TT.map(n=>{const tm=teams[n]||{},d=(allW[n]||{})[wi]||{},[a,b]=cuenta(wi,d,tm),gr=grades[n]||{};
    return [G.n,"S"+(wi+1),loc(n),(empOfTeam(tm)||{}).n||"",estado(d,wi).l,delivered(d)?fmt(d.at):"",str(d.by),a+"/"+b,str(gr.c&&gr.c[wi]),str(gr.m&&gr.m[wi])].map(csvq).join(",");}).join("\n")
   :"Grupo,Equipo,Director General,Integrantes,Organización,Entregas,"+W.map((w,i)=>"E"+(i+1)).join(",")+",Pitch,Sobre 100\n"+TT.map(n=>{const tm=teams[n]||{},gr=grades[n]||{};
-   return [G.n,loc(n),nameOf(tm,leaderOf(tm)),members(tm).map(([,x])=>x.n).join("; "),(empOfTeam(tm)||{}).n||"",W.filter((w,k)=>delivered((allW[n]||{})[k])).length+"/8",...W.map((w,k)=>str(gr.c&&gr.c[k])),str(gr.pitch),(score(gr)/.8).toFixed(1)].map(csvq).join(",");}).join("\n");
+   return [G.n,loc(n),nameOf(tm,leaderOf(tm)),members(tm).map(([,x])=>x.n).join("; "),(empOfTeam(tm)||{}).n||"",W.filter((w,k)=>delivered((allW[n]||{})[k])).length+"/8",...W.map((w,k)=>str(gr.c&&gr.c[k])),str(gr.pitch),(score(gr,allW[n]||{})/.8).toFixed(1)].map(csvq).join(",");}).join("\n");
  const dlCsv=async()=>{try{await B.download({filename:fname+".csv",data:"﻿"+csv()});setMsg("Resumen descargado.");}catch(e){setMsg("No se pudo descargar.");}};
  return h("div",{className:"stack"},
   h("div",{className:"card noprint",style:{borderColor:"var(--or)"}},h("h2",null,"📊 Reportes"),
    h("p",{className:"sm"},"Elige el grupo y el tipo de reporte. Todos se descargan en PDF con el mismo formato, o como resumen en CSV para Excel."),
    h("div",{className:"row",role:"group","aria-label":"Grupo"},GRUPOS.map(x=>h("button",{key:x.k,className:"btn "+(pg===x.k?"":"alt"),onClick:()=>{setPg(x.k);lsSet("pi-pg",x.k);}},x.n))),
-   h("div",{className:"row",role:"group","aria-label":"Tipo de reporte",style:{marginTop:8}},[["s","Por semana"],["g","Del grupo"]].concat([1,2,3,4,5].map(i=>[String(i),"Equipo "+i])).map(([k,l])=>h("button",{key:k,className:"btn sm "+(sc===k?"s":"alt"),onClick:()=>setSc(k)},l))),
+   h("div",{className:"row",role:"group","aria-label":"Tipo de reporte",style:{marginTop:8}},[["s","Por semana"],["g","Del grupo"],["a","Por alumno"]].concat([1,2,3,4,5].map(i=>[String(i),"Equipo "+i])).map(([k,l])=>h("button",{key:k,className:"btn sm "+(sc===k?"s":"alt"),onClick:()=>setSc(k)},l))),
    sc==="s"?h("div",null,h("div",{className:"row",role:"group","aria-label":"Semana",style:{marginTop:8}},W.map((w,i)=>h("button",{key:i,className:"btn sm "+(wi===i?"":"alt"),title:w.t,onClick:()=>setWi(i)},"S"+(i+1)))),
     h("label",{className:"sm row",style:{marginTop:8,gap:6}},h("input",{type:"checkbox",checked:full,onChange:e=>setFull(e.target.checked)}),"Incluir el contenido completo que entregó cada equipo")):null,
    h("div",{style:{marginTop:10}},h(PdfBtn,{target:box,fname,label:"⬇️ Descargar este reporte en PDF"})),
-   sc==="s"||sc==="g"?h("div",{className:"row",style:{marginTop:6}},h("button",{className:"btn alt sm",onClick:dlCsv},"Descargar resumen (CSV)"),msg?h("span",{className:"sm",role:"status"},msg):null):null),
-  h("div",{ref:box,className:"card"},sc==="s"?h(RepSemana,{G,wi,teams,allW,grades,full}):t?h(RepEquipo,{t,teams,allW,grades}):h(RepGrupo,{G,teams,allW,grades})));
+   sc==="s"||sc==="g"||sc==="a"?h("div",{className:"row",style:{marginTop:6}},h("button",{className:"btn alt sm",onClick:dlCsv},"Descargar resumen (CSV)"),msg?h("span",{className:"sm",role:"status"},msg):null):null),
+  h("div",{ref:box,className:"card"},sc==="s"?h(RepSemana,{G,wi,teams,allW,grades,full}):sc==="a"?h(RepAlumnos,{G,teams,allW,grades}):t?h(RepEquipo,{t,teams,allW,grades}):h(RepGrupo,{G,teams,allW,grades})));
 }
 
 /* ---------- Compartir la liga (docente) ---------- */
@@ -1435,7 +1561,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
    h("p",{className:"sm mut"},"«Reabrir selección» permite al equipo elegir otra organización; sus alternativas se conservan.")),
   h("div",null,h("h2",null,"Calificaciones y nota final ponderada"),
    h("div",{className:"w",style:{marginTop:8}},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),W.map((w,i)=>h("th",{key:i},"E"+(i+1),h("br"),h("small",null,Math.round(w.v*100)+"%"))),h("th",null,"Pitch",h("br"),h("small",null,"10%")),h("th",{className:"g"},"Puntos (máx. 80)"),h("th",{className:"g"},"Sobre 100"))),
-    h("tbody",null,TT.map(n=>{const gr=grades[n]||{},p=score(gr),q=p/.8;return h("tr",{key:n},h("td",{className:"c"},loc(n)),W.map((w,i)=>h("td",{key:i,className:"c"},str(gr.c&&gr.c[i])||"·")),
+    h("tbody",null,TT.map(n=>{const gr=grades[n]||{},p=score(gr,allW[n]||{}),q=p/.8;return h("tr",{key:n},h("td",{className:"c"},loc(n)),W.map((w,i)=>h("td",{key:i,className:"c"},cC(gr,i,allW[n]))),
      h("td",{style:{minWidth:90}},h("input",{type:"number",min:0,max:100,"aria-label":"Pitch equipo "+loc(n),value:str(gr.pitch),onChange:e=>wg2(n,["pitch"],e.target.value)})),
      h("td",{className:"c"},p.toFixed(1)),h("td",{className:"c "+(q>=90?"ok":q>=70?"wa":p?"ko":"")},q.toFixed(1)));})))),
    h("p",{className:"sm mut"},"La calificación de cada entrega se captura con la rúbrica dentro de la semana del equipo (botón «Abrir»). Los pesos suman 80% con el pitch; «Sobre 100» reescala el avance.")),
