@@ -202,7 +202,7 @@ function estado(wd,wi){const lim=dt(W[wi].d).getTime(),vx=vence(wi,wd),pr=vx>lim
  if(Date.now()>vx)return abierta(wi,wd)?{k:"no",l:"Vencida · sin entregar (aún se puede entregar con retraso)",c:"ko",s:"✗"}:{k:"no",l:"No entregado",c:"ko",s:"✗"};
  return {k:"pend",l:pr&&Date.now()>lim?"Pendiente · prórroga al "+fcorta(vx):"Pendiente",c:pr&&Date.now()>lim?"wa":"",s:"·"};}
 /* Con wd (entregas del equipo) aplica la penalización por retraso: 10 puntos sobre 100 (= 1 sobre 10) por semana. */
-function score(gr,wd){let p=0;W.forEach((w,i)=>{let c=parseFloat(gr&&gr.c&&gr.c[i]);if(!isNaN(c)){if(wd)c=Math.max(0,c-10*PENAL*semRetraso(i,wd[i]||{}));p+=c*w.v;}});const pi=parseFloat(gr&&gr.pitch);if(!isNaN(pi))p+=pi*PITCHW;return p;}
+function score(gr,wd){let p=0;W.forEach((w,i)=>{let c=parseFloat(gr&&gr.c&&gr.c[i]);if(!isNaN(c)){if(wd)c=Math.max(0,c-10*PENAL*semRetraso(i,wd[i]||{},gr));p+=c*w.v;}});const pi=parseFloat(gr&&gr.pitch);if(!isNaN(pi))p+=pi*PITCHW;return p;}
 const csvq=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
 
 const empOfTeam=tm=>{const id=tm&&tm.elegida,a=id&&tm.alts&&tm.alts[id];if(a&&!a.del&&str(a.n).trim())return a;const o=tm&&tm.org;return o&&str(o.n).trim()?o:null;};
@@ -1020,11 +1020,12 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h("p",{className:"sm mut"},"Vista previa del formato estándar con lo que han capturado."),
    h("div",{ref:doc,style:{marginTop:10,border:"1px solid var(--line)",borderRadius:8,padding:16,background:"var(--card)"}},h(DocEntrega,{wi,t,tm,wd}))),
   h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"Rúbrica y retroalimentación"),h("span",{className:"pill "+(str(gr&&gr.c&&gr.c[wi])?"ok":"")},(str(gr&&gr.c&&gr.c[wi])||"·")+" / 100")),
-   (()=>{const b=califBase(gr,wi),n=semRetraso(wi,wd||{}),f=califEq(gr,wi,wd||{});
+   (()=>{const b=califBase(gr,wi),n=semRetraso(wi,wd||{},gr),n0=semRetraso(wi,wd||{}),f=califEq(gr,wi,wd||{});
     return h("div",{className:"kpi",style:{margin:"8px 0"}},h("div",null,h("b",null,b==null?"—":r1(b).toFixed(1)),"Rúbrica (sobre 10)"),
      h("div",{className:n?"ko":""},h("b",null,n?"−"+(n*PENAL):"0"),n?"Retraso: "+n+" semana"+(n>1?"s":"")+" × "+PENAL+" punto":"Sin retraso"),
      h("div",null,h("b",null,f==null?"—":f.toFixed(1)),"Calificación de la semana (sobre 10)"));})(),
-   h("p",{className:"sm mut"},"Se resta "+PENAL+" punto (sobre 10) por cada semana o fracción de retraso respecto a la fecha límite"+(isAdmin?"; si das prórroga, el retraso se cuenta desde la prórroga.":".")),
+   h("p",{className:"sm mut"},"Se resta "+PENAL+" punto (sobre 10) por cada semana o fracción de retraso respecto a la fecha límite del calendario. La prórroga permite entregar, pero no elimina el retraso."+(gr&&gr.np&&gr.np[wi]?" La docente condonó la penalización de esta semana.":"")),
+   isAdmin&&(semRetraso(wi,wd||{})||(gr&&gr.np&&gr.np[wi]))?h("label",{className:"sm row",style:{gap:6,marginBottom:6}},h("input",{type:"checkbox",checked:!!(gr&&gr.np&&gr.np[wi]),onChange:e=>wg(["np",String(wi)],e.target.checked?true:"")}),"Condonar la penalización por retraso de esta semana a este equipo (causa justificada)"):null,
    h("div",{className:"ex",style:{margin:"8px 0"}},h("p",{className:"sm"},h("b",null,"Esta semana se busca · herramienta: "),FOCO[wi][0]),h("p",{className:"sm"},h("b",null,"Evidencia: "),FOCO[wi][1])),
    isAdmin?h("p",{className:"sm mut"},"Elige el nivel de cada criterio; los puntos se calculan solos. Si el trabajo queda entre dos niveles, ajusta los puntos a mano."):h("p",{className:"sm mut"},"Así se evalúa cada entrega. El nivel marcado es el que asignó la docente."),
    RUB.map(([key,l,mx,dsc,comp,lv])=>{const v=str(rb[key]),ni=nivelDe(mx,v);
@@ -1056,7 +1057,7 @@ function EntregableFinal({wd,ww,canEdit,setView}){
 
 /* ---------- Aportes por rol directivo (cada integrante escribe desde su rol) ---------- */
 function AportesRol({wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
- const ra=rolesAsumidos(tm),ev=(gr&&gr.rl&&gr.rl[wi])||{},pen=semRetraso(wi,wd||{});
+ const ra=rolesAsumidos(tm),ev=(gr&&gr.rl&&gr.rl[wi])||{},pen=semRetraso(wi,wd||{},gr);
  return h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"🎯 Perspectiva de cada rol directivo"),canEdit?h(AutoGuardado):null),
   h("p",{className:"sm mut"},"Cada integrante responde desde su dirección: qué ve, qué propone y qué decide su área en esta entrega. Solo quien tiene el rol escribe en su recuadro; los demás lo leen. Aparece en el PDF (sección 4.1). Abre «📘 Ejemplo» para ver cómo se hace el análisis de tu rol. La docente evalúa cada aporte de 0 a 10."),
   !ra.length?h("p",{className:"pill wa",style:{whiteSpace:"normal"}},"Aún no hay roles asumidos. Asígnenlos en «Mi equipo» → paso 1."):null,
@@ -1080,7 +1081,7 @@ function AportesRol({wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
        h("div",{style:{flex:"1 1 260px"}},h(Field,{id:"rc"+wi+r.k,l:"Comentario para "+nm,area:true,v:cm,on:x=>wg(["rc",String(wi),r.k],x),ph:"Qué hizo bien y qué debe mejorar en su análisis."}))))
      :h("div",{className:"sm",style:{marginTop:4}},typeof lv==="number"?h("p",{style:{margin:"2px 0"}},h("b",null,"Nivel: "),NIV[lv][0]):null,
        cm?h("p",{style:{margin:"2px 0",whiteSpace:"pre-wrap"}},h("b",null,"Comentario: "),cm):pts==null?h("p",{className:"mut",style:{margin:"2px 0"}},"Pendiente de evaluación."):null),
-     (()=>{const ci=califInd(tm,gr,wi,wd||{},id);return ci?h("p",{className:"sm",style:{margin:"6px 0 0"}},h("b",null,"Calificación individual de la semana: "+ci.v.toFixed(1)+" / 10"),ci.parcial?" (falta evaluar el aporte; por ahora es la del equipo)":"",pen?" · incluye "+txtPen(wi,wd||{}):""):null;})()));}));
+     (()=>{const ci=califInd(tm,gr,wi,wd||{},id);return ci?h("p",{className:"sm",style:{margin:"6px 0 0"}},h("b",null,"Calificación individual de la semana: "+ci.v.toFixed(1)+" / 10"),ci.parcial?" (falta evaluar el aporte; por ahora es la del equipo)":"",pen?" · incluye "+txtPen(wi,wd||{},gr):""):null;})()));}));
 }
 
 /* ---------- Reporte del proyecto ---------- */
@@ -1312,32 +1313,33 @@ const EJ_ROL=[
   in:"Guion del pitch de 15 minutos: 1) el problema con datos, 2) la propuesta con una demostración de la comanda digital, 3) los números, 4) el plan, 5) la petición a la dirección. Preparo las diapositivas y el video de la demostración."}];
 
 /* ---------- Calificación semanal con penalización por retraso ----------
-   Escala 0 a 10. Cada semana (o fracción) de retraso resta PENAL puntos. La prórroga de la docente
-   corre la fecha límite, así que el retraso se cuenta desde la prórroga.
+   Escala 0 a 10. Cada semana (o fracción) de retraso resta PENAL puntos, contada desde la fecha límite
+   del calendario (la prórroga deja entregar, pero no borra el retraso). La docente puede condonar la
+   penalización de una semana a un equipo (gr.np[semana]) cuando esté justificada.
    Individual = PESO_EQUIPO de la calificación del equipo (rúbrica) + PESO_ROL de la evaluación de su aporte
    como rol directivo (si aún no se evalúa el aporte, se usa solo la del equipo), menos la penalización. */
 const PENAL=1,PESO_ROL=.3,PESO_EQUIPO=1-PESO_ROL;
-const semRetraso=(wi,wd)=>{const vx=vence(wi,wd),ref=wd&&wd.est==="Entregado"?(wd.at||0):Date.now();return ref>vx?Math.ceil((ref-vx)/(7*864e5)):0;};
+const semRetraso=(wi,wd,gr)=>{if(gr&&gr.np&&gr.np[wi])return 0;const vx=dt(W[wi].d).getTime(),ref=wd&&wd.est==="Entregado"?(wd.at||0):Date.now();return ref>vx?Math.ceil((ref-vx)/(7*864e5)):0;};
 const r1=x=>Math.round(x*10)/10;
 const califBase=(gr,wi)=>{const c=parseFloat(gr&&gr.c&&gr.c[wi]);return isNaN(c)?null:c/10;};
 /* Calificación del equipo en la semana (0 a 10), ya con la penalización. */
-const califEq=(gr,wi,wd)=>{const b=califBase(gr,wi);return b==null?null:Math.max(0,r1(b-PENAL*semRetraso(wi,wd)));};
+const califEq=(gr,wi,wd)=>{const b=califBase(gr,wi);return b==null?null:Math.max(0,r1(b-PENAL*semRetraso(wi,wd,gr)));};
 /* Evaluación del aporte de un rol (0 a 10): número capturado o, si solo se marcó el nivel, su equivalente. */
 const rolPts=(gr,wi,k)=>{const v=parseFloat(gr&&gr.rp&&gr.rp[wi]&&gr.rp[wi][k]);if(!isNaN(v))return v;const l=gr&&gr.rl&&gr.rl[wi]&&gr.rl[wi][k];return typeof l==="number"&&NIV[l]?NIV[l][1]*10:null;};
 /* Calificación individual (0 a 10) de un integrante en la semana. */
 function califInd(tm,gr,wi,wd,id){const b=califBase(gr,wi);if(b==null)return null;
  const ks=ROLES.filter(r=>tm&&tm.roles&&tm.roles[r.k]===id).map(r=>r.k),rs=ks.map(k=>rolPts(gr,wi,k)).filter(x=>x!=null);
  const base=rs.length?PESO_EQUIPO*b+PESO_ROL*(rs.reduce((s,x)=>s+x,0)/rs.length):b;
- return {v:Math.max(0,r1(base-PENAL*semRetraso(wi,wd))),parcial:!rs.length};}
+ return {v:Math.max(0,r1(base-PENAL*semRetraso(wi,wd,gr))),parcial:!rs.length};}
 /* Promedio ponderado (0 a 10) con los pesos de cada semana, solo de las semanas ya calificadas. */
 const promPond=vals=>{let s=0,p=0;vals.forEach((v,i)=>{if(v!=null){s+=v*W[i].v;p+=W[i].v;}});return p?r1(s/p):null;};
-const txtPen=(wi,wd)=>{const n=semRetraso(wi,wd);return n?"−"+(n*PENAL)+" ("+n+" semana"+(n>1?"s":"")+" de retraso)":"";};
+const txtPen=(wi,wd,gr)=>{const n=semRetraso(wi,wd,gr);return n?"−"+(n*PENAL)+" ("+n+" semana"+(n>1?"s":"")+" de retraso)":"";};
 
 /* ---------- Reporte por alumno (docente) ---------- */
 function filasAlumnos(G,teams,allW,grades){const out=[];
  [1,2,3,4,5].map(i=>G.off+i).forEach(n=>{const tm=teams[n]||{},gr=grades[n]||{},wd=allW[n]||{};
   members(tm).forEach(([id,x])=>{const sem=W.map((w,i)=>califInd(tm,gr,i,wd[i]||{},id));
-   out.push({n:x.n,t:n,id,roles:rolesAOf(tm,id).join(", ")||"Sin rol",sem,prom:promPond(sem.map(s=>s&&s.v)),pen:W.map((w,i)=>delivered(wd[i])||califBase(gr,i)!=null?semRetraso(i,wd[i]||{}):0).reduce((a,b)=>a+b,0)});});});
+   out.push({n:x.n,t:n,id,roles:rolesAOf(tm,id).join(", ")||"Sin rol",sem,prom:promPond(sem.map(s=>s&&s.v)),pen:W.map((w,i)=>delivered(wd[i])||califBase(gr,i)!=null?semRetraso(i,wd[i]||{},gr):0).reduce((a,b)=>a+b,0)});});});
  return out.sort((a,b)=>a.n.localeCompare(b.n,"es"));}
 function RepAlumnos({G,teams,allW,grades}){
  const F=filasAlumnos(G,teams,allW,grades);
@@ -1354,7 +1356,7 @@ function RepAlumnos({G,teams,allW,grades}){
     h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Equipo (rúbrica)"),h("th",null,"Aporte del rol"),h("th",null,"Retraso"),h("th",null,"Calificación"),h("th",null,"Comentario del aporte"))),
      h("tbody",null,W.map((w,i)=>{const b=califBase(gr,i),rp=ks.map(r=>rolPts(gr,i,r.k)).filter(x=>x!=null),s=f.sem[i],cm=ks.map(r=>str(gr.rc&&gr.rc[i]&&gr.rc[i][r.k])).filter(Boolean).join(" · ");
       return h("tr",{key:i},h("td",{className:"c"},"S"+(i+1)),h("td",{className:"c"},b==null?"·":r1(b).toFixed(1)),h("td",{className:"c"},rp.length?r1(rp.reduce((a,x)=>a+x,0)/rp.length).toFixed(1):"·"),
-       h("td",{className:"c sm"},txtPen(i,wd[i]||{})||"—"),h("td",{className:"c"},h("b",null,s==null?"·":s.v.toFixed(1)+(s.parcial?"*":""))),h("td",{className:"sm"},cm||"—"));})))));}));
+       h("td",{className:"c sm"},txtPen(i,wd[i]||{},gr)||"—"),h("td",{className:"c"},h("b",null,s==null?"·":s.v.toFixed(1)+(s.parcial?"*":""))),h("td",{className:"sm"},cm||"—"));})))));}));
 }
 const csvAlumnos=(G,teams,allW,grades)=>"Grupo,Alumno,Equipo,Rol,"+W.map((w,i)=>"S"+(i+1)).join(",")+",Promedio,Semanas de retraso\n"+
  filasAlumnos(G,teams,allW,grades).map(f=>[G.n,f.n,loc(f.t),f.roles,...f.sem.map(s=>s==null?"":s.v.toFixed(1)+(s.parcial?"*":"")),f.prom==null?"":f.prom.toFixed(1),f.pen].map(csvq).join(",")).join("\n");
@@ -1362,7 +1364,7 @@ const csvAlumnos=(G,teams,allW,grades)=>"Grupo,Alumno,Equipo,Rol,"+W.map((w,i)=>
 /* ---------- Reportes (docente) ---------- */
 const nota=(gr,wd)=>{const p=score(gr||{},wd);return p?(p/.8).toFixed(1):"—";};
 /* Celda de calificación /100 con la penalización visible: «85 −10». */
-const cC=(gr,i,wd)=>{const c=str(gr&&gr.c&&gr.c[i]);if(!c)return "·";const n=semRetraso(i,(wd&&wd[i])||{});return n?c+" −"+(10*PENAL*n):c;};
+const cC=(gr,i,wd)=>{const c=str(gr&&gr.c&&gr.c[i]);if(!c)return "·";const n=semRetraso(i,(wd&&wd[i])||{},gr);return n?c+" −"+(10*PENAL*n):c;};
 function RepGrupo({G,teams,allW,grades}){
  const TT=[1,2,3,4,5].map(i=>G.off+i),reg=regMap(G,teams),sin=rosterOf(G).map(fullName).filter(n=>!reg[norm(n)]);
  let ent=0;TT.forEach(n=>W.forEach((w,i)=>{if(delivered((allW[n]||{})[i]))ent++;}));
@@ -1398,7 +1400,7 @@ function RepEquipo({t,teams,allW,grades}){
   Hs("3. Entregas"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Fecha límite"),h("th",null,"Estado"),h("th",null,"Entregó"),h("th",null,"Lista"),h("th",null,"Calificación"))),
    h("tbody",null,W.map((w,i)=>{const d=wd[i]||{},s2=estado(d,i),[a,b]=cuenta(i,d,tm);return h("tr",{key:i},h("td",null,h("b",null,"S"+(i+1)),h("div",{className:"sm"},w.t)),h("td",{style:{whiteSpace:"nowrap"}},dt(w.d).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})),
-    h("td",{className:s2.c},s2.l),h("td",{className:"sm"},delivered(d)?fmt(d.at)+(d.by?" · "+d.by:""):"—"),h("td",{className:"c"},a+"/"+b),h("td",{className:"c"},cC(gr,i,wd)+" /100",txtPen(i,d)?h("div",{className:"sm mut"},txtPen(i,d)):null));})))),
+    h("td",{className:s2.c},s2.l),h("td",{className:"sm"},delivered(d)?fmt(d.at)+(d.by?" · "+d.by:""):"—"),h("td",{className:"c"},a+"/"+b),h("td",{className:"c"},cC(gr,i,wd)+" /100",txtPen(i,d,gr)?h("div",{className:"sm mut"},txtPen(i,d,gr)):null));})))),
   Hs("4. Rúbrica y retroalimentación"),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),RUB.map(([k,l,mx])=>h("th",{key:k},l+" ("+mx+")")),h("th",null,"Comentario"))),
    h("tbody",null,W.map((w,i)=>{const rb=(gr.r&&gr.r[i])||{};return h("tr",{key:i},h("td",{className:"c"},"S"+(i+1)),RUB.map(([k])=>h("td",{key:k,className:"c"},str(rb[k])||"·")),h("td",{className:"sm"},str(gr.m&&gr.m[i])||"—"));})))),
