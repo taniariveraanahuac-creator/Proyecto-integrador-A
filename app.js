@@ -1001,7 +1001,7 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h(Field,{id:"s"+wi+"link",l:"Liga a anexos (opcional): presentación, organigrama, Canvas, fotos o video",type:"url",ro:!canEdit,v:link,on:v=>ww(["link"],v),ph:"https://drive.google.com/…"}),
    link&&!linkOk?h("p",{className:"sm",style:{color:"var(--kot)"}},"La liga debe empezar con https://"):linkOk?h("p",{className:"sm"},h("a",{href:link.trim(),target:"_blank",rel:"noopener"},"Abrir anexos")):null),
   w.fin?h(EntregableFinal,{wd,ww,canEdit,setView}):null,
-  h(AportesRol,{wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}),
+  h(AportesRol,{t,wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}),
   h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"📤 Entregar la semana "+(wi+1)),
    h("ul",{style:{listStyle:"none",paddingLeft:0,margin:"6px 0"}},ck.map(([l,ok],i)=>h("li",{key:i,style:{color:ok?"var(--okt)":"var(--mut)",fontWeight:600}},(ok?"✓ ":"○ ")+l))),
    wd&&wd.est==="Entregado"?h("div",null,h("p",{className:"pill "+st.c,style:{whiteSpace:"normal"}},"✅ Entregado el "+fmt(wd.at)+(wd.by?" por "+wd.by:"")),
@@ -1026,6 +1026,7 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
      h("div",null,h("b",null,f==null?"—":f.toFixed(1)),"Calificación de la semana (sobre 10)"));})(),
    h("p",{className:"sm mut"},"Se resta "+PENAL+" punto (sobre 10) por cada semana o fracción de retraso respecto a la fecha límite del calendario. La prórroga permite entregar, pero no elimina el retraso."+(gr&&gr.np&&gr.np[wi]?" La docente condonó la penalización de esta semana.":"")),
    isAdmin&&(semRetraso(wi,wd||{})||(gr&&gr.np&&gr.np[wi]))?h("label",{className:"sm row",style:{gap:6,marginBottom:6}},h("input",{type:"checkbox",checked:!!(gr&&gr.np&&gr.np[wi]),onChange:e=>wg(["np",String(wi)],e.target.checked?true:"")}),"Condonar la penalización por retraso de esta semana a este equipo (causa justificada)"):null,
+   isAdmin?h(SugSemana,{t,wi,tm,gr,wg}):null,
    h("div",{className:"ex",style:{margin:"8px 0"}},h("p",{className:"sm"},h("b",null,"Esta semana se busca · herramienta: "),FOCO[wi][0]),h("p",{className:"sm"},h("b",null,"Evidencia: "),FOCO[wi][1])),
    isAdmin?h("p",{className:"sm mut"},"Elige el nivel de cada criterio; los puntos se calculan solos. Si el trabajo queda entre dos niveles, ajusta los puntos a mano."):h("p",{className:"sm mut"},"Así se evalúa cada entrega. El nivel marcado es el que asignó la docente."),
    RUB.map(([key,l,mx,dsc,comp,lv])=>{const v=str(rb[key]),ni=nivelDe(mx,v);
@@ -1036,6 +1037,22 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
       return h(isAdmin?"button":"div",{key:nl,className:"opt sm","aria-pressed":isAdmin?on:undefined,onClick:isAdmin?()=>setR(key,String(pts)):undefined,style:{minHeight:0,padding:"8px 10px",borderColor:on?"var(--or)":"var(--line)",background:on?"var(--soft)":"var(--card)",cursor:isAdmin?"pointer":"default"}},
        h("b",null,nl+" · "+pts),h("span",{className:"sm",style:{display:"block",color:"var(--mut)"}},lv[i]));})));}),
    isAdmin?h(Field,{id:"com"+wi,l:"Comentario para el equipo",area:true,v:gr&&gr.m&&gr.m[wi],on:v=>wg(["m",String(wi)],v)}):(str(gr&&gr.m&&gr.m[wi])?h("p",{style:{marginTop:8}},h("b",null,"Comentario: "),gr.m[wi]):h("p",{className:"mut",style:{marginTop:8}},str(gr&&gr.c&&gr.c[wi])?"":"Pendiente de revisión."))));
+}
+
+function SugSemana({t,wi,tm,gr,wg}){
+ const sg=revSug(t,wi),[conf,setConf]=useState(false),[ok,setOk]=useState(false);if(!sg)return null;
+ const tot=revTotal(sg),hay=str(gr&&gr.c&&gr.c[wi])!=="";
+ const go=()=>{aplicarSug(sg,wi,tm,wg);setConf(false);setOk(true);};
+ return h("div",{style:{margin:"8px 0",padding:"10px 12px",border:"2px solid var(--or)",borderRadius:8,background:"var(--soft)"}},
+  h("div",{className:"bar"},h("b",null,"💡 Revisión experta sugerida"),h("span",{className:"pill wa"},tot+" / 100")),
+  sg.resumen?h("p",{className:"sm",style:{margin:"6px 0"}},sg.resumen):null,
+  h("p",{className:"sm",style:{margin:"4px 0"}},RUB.map(([k,l,mx])=>l.split(" ")[0]+" "+((sg.r&&sg.r[k])??"·")+"/"+mx).join(" · ")),
+  h("details",null,h("summary",{className:"sm"},"Ver el comentario sugerido para el equipo"),h("p",{className:"sm",style:{whiteSpace:"pre-wrap",marginTop:6}},sg.m||"—")),
+  h("div",{className:"row",style:{marginTop:8}},
+   conf?[h("span",{key:"t",className:"sm"},"Ya hay calificación capturada. ¿Reemplazarla con la sugerencia?"),h("button",{key:"s",className:"btn sm",onClick:go},"Sí, reemplazar"),h("button",{key:"n",className:"btn alt sm",onClick:()=>setConf(false)},"No")]
+    :h("button",{className:"btn sm",onClick:()=>hay?setConf(true):go()},"Aplicar sugerencia (rúbrica, comentario y roles)"),
+   ok?h("span",{className:"sm",role:"status"},"✓ Aplicada. Puedes ajustar cualquier punto abajo."):null),
+  h("p",{className:"sm mut",style:{margin:"6px 0 0"}},"Solo tú ves este recuadro. Revisa la sugerencia antes de aplicarla."));
 }
 
 /* ---------- Entregable del proyecto final (S8) ---------- */
@@ -1056,7 +1073,13 @@ function EntregableFinal({wd,ww,canEdit,setView}){
 }
 
 /* ---------- Aportes por rol directivo (cada integrante escribe desde su rol) ---------- */
-function AportesRol({wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
+function SugRol({sg,k,wi,wg}){
+ if(!sg||!sg.rp||sg.rp[k]==null)return null;const v=sg.rp[k],c=(sg.rc&&sg.rc[k])||"";
+ return h("div",{className:"sm",style:{marginTop:6,padding:"6px 8px",borderRadius:6,background:"var(--card)",border:"1px solid var(--line)"}},
+  h("b",null,"💡 Sugerido: "+v+" / 10"),c?" · "+c:"",
+  h("button",{className:"btn alt sm",style:{marginLeft:8},onClick:()=>{const W_=String(wi),i=nivelPts(v);wg(["rp",W_,k],String(v));wg(["rl",W_,k],i>=0?i:"");if(c)wg(["rc",W_,k],c);}},"Usar"));
+}
+function AportesRol({t,wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
  const ra=rolesAsumidos(tm),ev=(gr&&gr.rl&&gr.rl[wi])||{},pen=semRetraso(wi,wd||{},gr);
  return h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"🎯 Perspectiva de cada rol directivo"),canEdit?h(AutoGuardado):null),
   h("p",{className:"sm mut"},"Cada integrante responde desde su dirección: qué ve, qué propone y qué decide su área en esta entrega. Solo quien tiene el rol escribe en su recuadro; los demás lo leen. Aparece en el PDF (sección 4.1). Abre «📘 Ejemplo» para ver cómo se hace el análisis de tu rol. La docente evalúa cada aporte de 0 a 10."),
@@ -1074,6 +1097,7 @@ function AportesRol({wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}){
      h("div",{className:"bar"},h("b",{className:"sm"},"📝 Evaluación de la docente · "+nm),
       h("span",{className:"pill "+(pts==null?"":pts>=8?"ok":pts>=6?"wa":"ko")},pts==null?"Sin evaluar":"Aporte: "+r1(pts).toFixed(1)+" / 10")),
      isAdmin?h("div",null,
+      h(SugRol,{sg:revSug(t,wi),k:r.k,wi,wg}),
       h("div",{className:"row",role:"group","aria-label":"Nivel del aporte "+r.a,style:{marginTop:6}},h("span",{className:"sm mut"},"Nivel:"),
        NIV.map(([nl,f],i)=>h("button",{key:nl,className:"btn sm "+(lv===i?"":"alt"),"aria-pressed":lv===i,onClick:()=>nivel(i)},nl+" · "+(f*10)))),
       h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},
@@ -1528,6 +1552,40 @@ function EquiposDocente({G,teams,wt,addMem}){
      h("option",{value:""},"+ Agregar alumno sin equipo…"),sin.map(n=>h("option",{key:n,value:n},n))):null);})));
 }
 
+/* ---------- Revisión experta sugerida (solo docente) ----------
+   Las calificaciones y comentarios sugeridos NO viven en el código público: la docente carga un archivo
+   privado (.json) en el Panel docente y queda guardado solo en su navegador. Nada se aplica solo: en cada
+   semana revisada aparece la sugerencia con el botón «Aplicar sugerencia». */
+const REVK="pi-revision";
+const revisionGet=()=>{try{const o=JSON.parse(localStorage.getItem(REVK)||"null");return o&&o.equipos?o:null;}catch(e){return null;}};
+const revSug=(t,wi)=>{const R=revisionGet();return (R&&R.equipos&&R.equipos[t]&&R.equipos[t][wi])||null;};
+const revTotal=sg=>RUB.reduce((a,[k])=>a+(parseFloat(sg.r&&sg.r[k])||0),0);
+const nivelPts=v=>{const i=NIV.findIndex(([,f])=>Math.abs(f*10-v)<1e-9);return i;};
+/* Escribe la sugerencia de una semana: rúbrica, total, comentario y evaluación de cada rol asumido. */
+function aplicarSug(sg,wi,tm,wg){const W_=String(wi);
+ RUB.forEach(([k])=>{if(sg.r&&sg.r[k]!=null)wg(["r",W_,k],String(sg.r[k]));});
+ wg(["c",W_],String(revTotal(sg)));if(sg.m)wg(["m",W_],sg.m);
+ Object.keys(sg.rp||{}).forEach(k=>{if(!(tm&&tm.roles&&tm.roles[k]))return;const v=sg.rp[k];wg(["rp",W_,k],String(v));const i=nivelPts(v);wg(["rl",W_,k],i>=0?i:"");if(sg.rc&&sg.rc[k])wg(["rc",W_,k],sg.rc[k]);});}
+function RevisionDocente({teams,grades,openTeam}){
+ const [R,setR]=useState(revisionGet),[msg,setMsg]=useState(""),file=useRef(null);
+ const cargar=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const o=JSON.parse(rd.result);if(!o||o.app!=="PI-ADM1401-revision"||!o.equipos)throw 0;localStorage.setItem(REVK,JSON.stringify(o));setR(o);setMsg("✓ Revisión cargada en este navegador.");}catch(x){setMsg("⚠️ Ese archivo no es una revisión del Proyecto Integrador.");}e.target.value="";};rd.readAsText(f);};
+ const quitar=()=>{try{localStorage.removeItem(REVK);}catch(e){}setR(null);setMsg("Revisión quitada de este navegador. Lo que ya aplicaste se conserva.");};
+ const filas=[];if(R)Object.keys(R.equipos).forEach(t=>Object.keys(R.equipos[t]).forEach(wi=>filas.push([+t,+wi,R.equipos[t][wi]])));
+ return h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"💡 Revisión experta sugerida"+(R&&R.fecha?" · "+R.fecha:"")),
+  !R?h("p",{className:"sm"},"Carga el archivo de revisión (.json) que recibiste. Queda guardado solo en este navegador y no lo ven los alumnos. Después, en cada semana revisada aparecerá la calificación y el comentario sugeridos con el botón «Aplicar sugerencia».")
+   :h("div",null,R.nota?h("p",{className:"sm mut"},R.nota):null,
+    (R.alertas||[]).length?h("div",{className:"ex",style:{margin:"8px 0"}},h("b",{className:"sm"},"Alertas"),h("ul",{className:"sm",style:{margin:"4px 0 0",paddingLeft:"1.2em"}},R.alertas.map((a,i)=>h("li",{key:i},a.txt,a.t?[" ",h("button",{key:"b",className:"linklike sm",onClick:()=>openTeam(a.t)},"Abrir equipo")]:null)))):null,
+    h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Semana"),h("th",null,"Sugerida"),h("th",null,"Capturada"),h("th",null,"Observación"),h("th",null,""))),
+     h("tbody",null,filas.map(([t,wi,sg])=>{const gr=grades[t]||{},cap=str(gr.c&&gr.c[wi]),tot=revTotal(sg);
+      return h("tr",{key:t+"-"+wi},h("td",null,tLab(t)+((empOfTeam(teams[t])||{}).n?" · "+empOfTeam(teams[t]).n:"")),h("td",{className:"c"},"S"+(wi+1)),h("td",{className:"c"},tot+"/100"),
+       h("td",{className:"c "+(cap?(+cap===tot?"ok":"wa"):"")},cap?cap+"/100":"Pendiente"),h("td",{className:"sm"},sg.resumen||""),h("td",null,h("button",{className:"btn alt sm",onClick:()=>openTeam(t)},"Abrir")));})))),
+    h("p",{className:"sm mut"},"«Abrir» lleva al equipo; entra a la semana y revisa la sugerencia antes de aplicarla. Puedes ajustar cualquier punto después.")),
+  h("div",{className:"row",style:{marginTop:8}},h("input",{ref:file,type:"file",accept:".json,application/json",style:{display:"none"},onChange:cargar}),
+   h("button",{className:"btn sm "+(R?"alt":""),onClick:()=>file.current&&file.current.click()},R?"Cargar otra revisión":"Cargar archivo de revisión"),
+   R?h("button",{className:"btn alt sm",onClick:quitar},"Quitar de este navegador"):null),
+  msg?h("p",{className:"sm",role:"status",style:{marginTop:6}},msg):null);
+}
+
 function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen,wt,addMem}){
  const [conf,setConf]=useState("");
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L");
@@ -1537,6 +1595,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
  return h("div",{className:"stack"},
   h("div",{className:"row",role:"group","aria-label":"Grupo"},GRUPOS.map(x=>h("button",{key:x.k,className:"btn "+(pg===x.k?"":"alt"),onClick:()=>{setPg(x.k);lsSet("pi-pg",x.k);}},x.n+" · "+Object.keys(regMap(x,teams)).length+"/"+x.lista.length))),
   h(ClavesEquipo,{claves:claves||{},regen,teams}),
+  h(RevisionDocente,{teams,grades,openTeam}),
   h(CalendarioDocente),
   h("div",{className:"kpi"},h("div",null,h("b",null,"S"+(sa+1)+": "+entSa+"/5"),"Entregaron la semana en curso"),h("div",null,h("b",null,tot?Math.round(ent/tot*100)+"%":"0%"),"Entregas del semestre"),h("div",{className:rojo?"ko":""},h("b",null,rojo),"Entregas vencidas"),h("div",null,h("b",null,sin.length),"Alumnos sin equipo")),
   h("div",null,h("h2",null,"Tablero de entregas · "+G.n),
