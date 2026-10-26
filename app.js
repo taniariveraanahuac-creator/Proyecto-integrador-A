@@ -1566,11 +1566,13 @@ function aplicarSug(sg,wi,tm,wg){const W_=String(wi);
  RUB.forEach(([k])=>{if(sg.r&&sg.r[k]!=null)wg(["r",W_,k],String(sg.r[k]));});
  wg(["c",W_],String(revTotal(sg)));if(sg.m)wg(["m",W_],sg.m);
  Object.keys(sg.rp||{}).forEach(k=>{if(!(tm&&tm.roles&&tm.roles[k]))return;const v=sg.rp[k];wg(["rp",W_,k],String(v));const i=nivelPts(v);wg(["rl",W_,k],i>=0?i:"");if(sg.rc&&sg.rc[k])wg(["rc",W_,k],sg.rc[k]);});}
-function RevisionDocente({teams,grades,openTeam}){
- const [R,setR]=useState(revisionGet),[msg,setMsg]=useState(""),file=useRef(null);
+function RevisionDocente({teams,grades,openTeam,wg2}){
+ const [R,setR]=useState(revisionGet),[msg,setMsg]=useState(""),[conf,setConf]=useState(false),file=useRef(null);
  const cargar=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const o=JSON.parse(rd.result);if(!o||o.app!=="PI-ADM1401-revision"||!o.equipos)throw 0;localStorage.setItem(REVK,JSON.stringify(o));setR(o);setMsg("✓ Revisión cargada en este navegador.");}catch(x){setMsg("⚠️ Ese archivo no es una revisión del Proyecto Integrador.");}e.target.value="";};rd.readAsText(f);};
  const quitar=()=>{try{localStorage.removeItem(REVK);}catch(e){}setR(null);setMsg("Revisión quitada de este navegador. Lo que ya aplicaste se conserva.");};
  const filas=[];if(R)Object.keys(R.equipos).forEach(t=>Object.keys(R.equipos[t]).forEach(wi=>filas.push([+t,+wi,R.equipos[t][wi]])));
+ const yaCap=filas.filter(([t,wi])=>str(((grades[t]||{}).c||{})[wi])!=="").length;
+ const todas=()=>{filas.forEach(([t,wi,sg])=>aplicarSug(sg,wi,teams[t]||{},(p,v)=>wg2(t,p,v)));setConf(false);setMsg("✓ Se aplicaron "+filas.length+" calificaciones sugeridas con sus comentarios y la evaluación de cada rol. Puedes ajustar cualquiera desde la semana del equipo.");};
  return h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"💡 Revisión experta sugerida"+(R&&R.fecha?" · "+R.fecha:"")),
   !R?h("p",{className:"sm"},"Carga el archivo de revisión (.json) que recibiste. Queda guardado solo en este navegador y no lo ven los alumnos. Después, en cada semana revisada aparecerá la calificación y el comentario sugeridos con el botón «Aplicar sugerencia».")
    :h("div",null,R.nota?h("p",{className:"sm mut"},R.nota):null,
@@ -1579,7 +1581,10 @@ function RevisionDocente({teams,grades,openTeam}){
      h("tbody",null,filas.map(([t,wi,sg])=>{const gr=grades[t]||{},cap=str(gr.c&&gr.c[wi]),tot=revTotal(sg);
       return h("tr",{key:t+"-"+wi},h("td",null,tLab(t)+((empOfTeam(teams[t])||{}).n?" · "+empOfTeam(teams[t]).n:"")),h("td",{className:"c"},"S"+(wi+1)),h("td",{className:"c"},tot+"/100"),
        h("td",{className:"c "+(cap?(+cap===tot?"ok":"wa"):"")},cap?cap+"/100":"Pendiente"),h("td",{className:"sm"},sg.resumen||""),h("td",null,h("button",{className:"btn alt sm",onClick:()=>openTeam(t)},"Abrir")));})))),
-    h("p",{className:"sm mut"},"«Abrir» lleva al equipo; entra a la semana y revisa la sugerencia antes de aplicarla. Puedes ajustar cualquier punto después.")),
+    h("p",{className:"sm mut"},"«Abrir» lleva al equipo; entra a la semana y revisa la sugerencia antes de aplicarla. Puedes ajustar cualquier punto después."),
+    wg2&&filas.length?h("div",{className:"row",style:{marginTop:8}},
+     conf?[h("span",{key:"t",className:"sm"},"Se capturarán "+filas.length+" entregas"+(yaCap?" (reemplaza "+yaCap+" ya capturada"+(yaCap>1?"s":"")+")":"")+". ¿Continuar?"),h("button",{key:"s",className:"btn sm",onClick:todas},"Sí, aplicar todas"),h("button",{key:"n",className:"btn alt sm",onClick:()=>setConf(false)},"No")]
+      :h("button",{className:"btn",onClick:()=>setConf(true)},"✅ Aplicar todas las sugerencias ("+filas.length+")")):null),
   h("div",{className:"row",style:{marginTop:8}},h("input",{ref:file,type:"file",accept:".json,application/json",style:{display:"none"},onChange:cargar}),
    h("button",{className:"btn sm "+(R?"alt":""),onClick:()=>file.current&&file.current.click()},R?"Cargar otra revisión":"Cargar archivo de revisión"),
    R?h("button",{className:"btn alt sm",onClick:quitar},"Quitar de este navegador"):null),
@@ -1595,7 +1600,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
  return h("div",{className:"stack"},
   h("div",{className:"row",role:"group","aria-label":"Grupo"},GRUPOS.map(x=>h("button",{key:x.k,className:"btn "+(pg===x.k?"":"alt"),onClick:()=>{setPg(x.k);lsSet("pi-pg",x.k);}},x.n+" · "+Object.keys(regMap(x,teams)).length+"/"+x.lista.length))),
   h(ClavesEquipo,{claves:claves||{},regen,teams}),
-  h(RevisionDocente,{teams,grades,openTeam}),
+  h(RevisionDocente,{teams,grades,openTeam,wg2}),
   h(CalendarioDocente),
   h("div",{className:"kpi"},h("div",null,h("b",null,"S"+(sa+1)+": "+entSa+"/5"),"Entregaron la semana en curso"),h("div",null,h("b",null,tot?Math.round(ent/tot*100)+"%":"0%"),"Entregas del semestre"),h("div",{className:rojo?"ko":""},h("b",null,rojo),"Entregas vencidas"),h("div",null,h("b",null,sin.length),"Alumnos sin equipo")),
   h("div",null,h("h2",null,"Tablero de entregas · "+G.n),
