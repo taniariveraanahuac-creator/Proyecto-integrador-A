@@ -108,8 +108,10 @@ function cartaTxt(t,tm){const ms=members(tm).map(([,x])=>x.n);
 /* ---------- Calendario de entregas ----------
    Del 12 de octubre al 24 de noviembre de 2026; cada entrega cierra a las 23:59 de su fecha límite.
    S1 a S3 cada domingo; S4 a S7 cada 4 o 5 días; S8 = PROYECTO FINAL, martes 24 de noviembre.
-   En la versión con Hoja de Google, las fechas vienen de LIMITES en Code.gs (una sola fuente) y reemplazan a estas. */
+   Estas son las fechas ORIGINALES. Las vigentes las envía el servidor y la docente las cambia en
+   Panel docente → «Calendario de entregas» (sin tocar código ni lo ya entregado). */
 const CALENDARIO=["2026-10-18","2026-10-25","2026-11-01","2026-11-05","2026-11-10","2026-11-15","2026-11-19","2026-11-24"];
+window.PI_CAL_ORIGINAL=CALENDARIO.slice();
 const aplicarCalendario=lista=>{if(Array.isArray(lista))lista.forEach((d,i)=>{if(W[i]&&/^\d{4}-\d{2}-\d{2}$/.test(d))W[i].d=d;});};
 
 /* ---------- Entregas semanales aplicadas a la empresa asignada ---------- */
@@ -274,7 +276,7 @@ function QueSePide(){
  const F=[["Equipo y organización","S1","Registrar al equipo, asumir los 6 roles directivos y elegir una organización real de Quintana Roo cuyo dueño o responsable acepte colaborar."],
   ["Diagnóstico","S2 a S4","Entorno PESTEL y mercado, 5 Fuerzas de Porter, misión, visión, FODA y objetivos SMART de la mejora."],
   ["Diseño de la mejora","S5 a S7","Canvas actual y con la mejora, cambios en la organización y plan de talento."],
-  ["Proyecto final","S8 · 24 nov","Entregable final: documento integrado S1 a S8, propuesta de mejora completa (problema, solución, implementación, inversión, retorno, Balanced Scorecard), presentación del pitch y evidencia ante la organización."]];
+  ["Proyecto final","S8 · "+dt(W[W.length-1].d).toLocaleDateString("es-MX",{day:"numeric",month:"short"}),"Entregable final: documento integrado S1 a S8, propuesta de mejora completa (problema, solución, implementación, inversión, retorno, Balanced Scorecard), presentación del pitch y evidencia ante la organización."]];
  return h("div",{className:"card"},h("h2",null,"¿Qué se pide en el Proyecto Integrador?"),
   h("p",null,"Su equipo actúa como el ",h("b",null,"consejo directivo de una organización real de Quintana Roo"),". Cada semana entregan una parte del análisis y al final una ",h("b",null,"propuesta de mejora"),", que comparten con el dueño o responsable y presentan en el pitch."),
   h("div",{className:"grid",style:{gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))"}},F.map(([t,s2,d])=>h("div",{key:t,className:"ex"},h("span",{className:"pill"},s2),h("h3",{style:{marginTop:6}},t),h("p",{className:"sm"},d)))),
@@ -1249,6 +1251,30 @@ function Compartir(){
 }
 
 /* ---------- Panel docente ---------- */
+/* ---------- Calendario de entregas (docente) ----------
+   Cambia las 8 fechas límite para todos los equipos. No modifica nada de lo capturado o entregado,
+   ni las prórrogas por equipo: solo recalcula qué está a tiempo, vencido o tarde. */
+function CalendarioDocente(){
+ const B=window.PI_BACKEND,[f,setF]=useState(()=>W.map(w=>w.d)),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false),[conf,setConf]=useState(false);
+ useEffect(()=>B.onCalendario?B.onCalendario(l=>{setF(l.slice());}):undefined,[]);
+ const iso=d=>/^\d{4}-\d{2}-\d{2}$/.test(d),ok=f.every((d,i)=>iso(d)&&(i===0||d>=f[i-1])),cambio=f.some((d,i)=>d!==W[i].d),orig=W.every((w,i)=>w.d===CALENDARIO[i]);
+ const go=async fechas=>{setBusy(true);setMsg("");const r=await B.calendario(fechas);setBusy(false);setConf(false);
+  if(r&&r.ok){setF((r.limites||CALENDARIO).slice());setMsg(fechas?"✓ Calendario guardado. Todos los equipos ya ven las nuevas fechas.":"✓ Se restauraron las fechas originales.");}else setMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
+ if(!B.calendario)return null;
+ return h("div",{className:"card"},h("h2",null,"📅 Calendario de entregas · ambos grupos"),
+  h("p",{className:"sm mut"},"Cambia la fecha límite de cualquier semana; cada una cierra a las 23:59 (hora de Cancún). ",h("b",null,"No se modifica nada de lo capturado ni entregado"),", ni las prórrogas que hayas dado por equipo: solo se recalcula qué queda a tiempo, vencido o tarde. La S8 es también el cierre general: hasta esa fecha se pueden entregar semanas vencidas."),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Entrega"),h("th",null,"Fecha original"),h("th",null,"Fecha límite"))),
+   h("tbody",null,W.map((w,i)=>h("tr",{key:i},h("td",{className:"c"},h("b",null,"S"+(i+1))),h("td",null,w.t),h("td",{className:"c sm mut"},dt(CALENDARIO[i]).toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})),
+    h("td",{className:f[i]!==W[i].d?"wa":""},h("input",{type:"date","aria-label":"Fecha límite S"+(i+1),value:f[i]||"",min:i?f[i-1]:undefined,max:i<W.length-1?f[i+1]:undefined,onChange:e=>{const v=e.target.value;setF(p=>p.map((x,k)=>k===i?v:x));setMsg("");}}))))))),
+  !ok?h("p",{className:"sm",style:{color:"var(--kot)"}},"Revisa las fechas: deben ir en orden (S1 ≤ S2 ≤ … ≤ S8)."):null,
+  h("div",{className:"row",style:{marginTop:10}},
+   conf?h("span",{className:"row"},h("span",{className:"sm"},"¿Guardar el nuevo calendario para todos los equipos?"),h("button",{className:"btn sm",disabled:busy,onClick:()=>go(f)},busy?"Guardando…":"Sí, guardar"),h("button",{className:"btn alt sm",onClick:()=>setConf(false)},"No"))
+    :h("button",{className:"btn sm",disabled:busy||!ok||!cambio,onClick:()=>setConf(true)},"Guardar calendario"),
+   cambio?h("button",{className:"btn alt sm",disabled:busy,onClick:()=>{setF(W.map(w=>w.d));setMsg("");setConf(false);}},"Descartar cambios"):null,
+   !orig?h("button",{className:"btn alt sm",disabled:busy,onClick:()=>go(null)},"Restaurar fechas originales"):null),
+  msg?h("p",{className:"sm",role:"status",style:{marginTop:8}},msg):null);
+}
+
 function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen}){
  const [conf,setConf]=useState("");
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L");
@@ -1258,6 +1284,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
  return h("div",{className:"stack"},
   h("div",{className:"row",role:"group","aria-label":"Grupo"},GRUPOS.map(x=>h("button",{key:x.k,className:"btn "+(pg===x.k?"":"alt"),onClick:()=>{setPg(x.k);lsSet("pi-pg",x.k);}},x.n+" · "+Object.keys(regMap(x,teams)).length+"/"+x.lista.length))),
   h(ClavesEquipo,{claves:claves||{},regen,teams}),
+  h(CalendarioDocente),
   h("div",{className:"kpi"},h("div",null,h("b",null,"S"+(sa+1)+": "+entSa+"/5"),"Entregaron la semana en curso"),h("div",null,h("b",null,tot?Math.round(ent/tot*100)+"%":"0%"),"Entregas del semestre"),h("div",{className:rojo?"ko":""},h("b",null,rojo),"Entregas vencidas"),h("div",null,h("b",null,sin.length),"Alumnos sin equipo")),
   h("div",null,h("h2",null,"Tablero de entregas · "+G.n),
    h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Organización"),W.map((w,i)=>h("th",{key:i,style:i===sa?{outline:"3px solid #fff",outlineOffset:-4}:null},"S"+(i+1),h("br"),h("small",null,dt(w.d).toLocaleDateString("es-MX",{day:"2-digit",month:"2-digit"})))),h("th",null,"%"),h("th",null,""))),
@@ -1539,5 +1566,7 @@ window.PI_BACKEND.init().then(info=>{
  const r=info&&info.roster;
  aplicarCalendario(info&&info.limites);
  if(r)GRUPOS.forEach(g=>{if(Array.isArray(r[g.k]))g.lista=r[g.k].filter(x=>Array.isArray(x)&&(x[0]||x[1]));});
- ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+ const root=ReactDOM.createRoot(document.getElementById("root"));root.render(h(App));
+ /* Si la docente cambia el calendario, todas las páginas abiertas se actualizan solas. */
+ if(window.PI_BACKEND.onCalendario)window.PI_BACKEND.onCalendario(l=>{aplicarCalendario(l);root.render(h(App));});
 });

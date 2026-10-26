@@ -53,6 +53,7 @@ function responder_(q) {
       case "join":    return salida_(unirse_(yo, Number(q.t)));
       case "draw":    return salida_(sortear_(yo, Number(q.t), q.pool || []));
       case "asignar": return salida_(asignar_(yo, String(q.id || ""), String(q.nombre || ""), Number(q.eq) || 0));
+      case "calendario": return salida_(yo.rol === "docente" ? guardarCalendario_(q.fechas) : { ok: false, err: "privacidad", msg: MSG_PRIVACIDAD });
       case "nuevaClave": return salida_(yo.rol === "docente" ? nuevaClave_(Number(q.t)) : { ok: false, err: "privacidad", msg: MSG_PRIVACIDAD });
       default:        return salida_({ ok: false, err: "Acción desconocida" });
     }
@@ -170,10 +171,10 @@ function lugares_(g) { var c = conteos_(g), o = {}; Object.keys(c).forEach(funct
 function hola_(yo) {
   if (yo.rol === "docente") {
     var r = {}; alumnos_().lista.forEach(function (a) { (r[a.g] = r[a.g] || []).push([a.ap, a.no]); });
-    return { ok: true, rol: "docente", roster: r, rev: revActual_(), hoja: SpreadsheetApp.getActive().getUrl(), limites: LIMITES, claves: claves_().porEquipo };
+    return { ok: true, rol: "docente", roster: r, rev: revActual_(), hoja: SpreadsheetApp.getActive().getUrl(), limites: limites_(), claves: claves_().porEquipo };
   }
   var a = yo.a;
-  return { ok: true, rol: "alumno", clave: !!yo.clave, nombre: a.id ? a.n : "", grupo: a.g, equipo: a.eq || 0, me: a.id, max: MAX_EQUIPO, pub: a.eq ? null : lugares_(a.g), rev: revActual_(), limites: LIMITES };
+  return { ok: true, rol: "alumno", clave: !!yo.clave, nombre: a.id ? a.n : "", grupo: a.g, equipo: a.eq || 0, me: a.id, max: MAX_EQUIPO, pub: a.eq ? null : lugares_(a.g), rev: revActual_(), limites: limites_() };
 }
 
 /* ---------- Almacén: una fila por documento en la hoja «datos» ---------- */
@@ -228,7 +229,7 @@ function vista_(yo, p, d) {
 
 function desde_(yo, v) {
   var actual = revActual_();
-  if (v >= actual && v > 0) return { ok: true, rev: actual, docs: [] };
+  if (v >= actual && v > 0) return { ok: true, rev: actual, docs: [], limites: limites_() };
   var t = leerTodo_(), out = [], vistos = {};
   if (yo.rol === "docente") {
     Object.keys(t.filas).forEach(function (p) {
@@ -237,7 +238,7 @@ function desde_(yo, v) {
       out.push([p, d == null ? null : vista_(yo, p, d)]); vistos[p] = 1;
     });
     for (var n = 1; n <= 10; n++) { var tp = "teams/" + n; if (!vistos[tp]) out.push([tp, vista_(yo, tp, t.filas[tp] ? parse_(t.filas[tp].json) : null)]); }
-    return { ok: true, rev: actual, docs: out };
+    return { ok: true, rev: actual, docs: out, limites: limites_() };
   }
   // Alumno: se envía completo su propio alcance (son pocos documentos).
   Object.keys(t.filas).forEach(function (p) {
@@ -247,7 +248,7 @@ function desde_(yo, v) {
   });
   if (yo.a.eq && !vistos["teams/" + yo.a.eq]) out.push(["teams/" + yo.a.eq, vista_(yo, "teams/" + yo.a.eq, null)]);
   if (yo.a.eq) out.push(["pub/libres", { n: alumnos_().lista.filter(function (x) { return x.g === yo.a.g && !x.eq; }).map(function (x) { return x.n; }) }]);
-  return { ok: true, rev: actual, full: true, docs: out };
+  return { ok: true, rev: actual, full: true, docs: out, limites: limites_() };
 }
 function leerDoc_(yo, p) {
   if (!p) return { ok: false, err: "ruta vacía" };
@@ -334,15 +335,17 @@ function guardar_(t, cambios) {
 
 /* Fecha límite de la semana i: 23:59 de Cancún (UTC-5) o la prórroga del documento. */
 function venceMs_(i, d) {
-  if (!LIMITES[i]) return Infinity;
-  var lim = new Date(LIMITES[i] + "T23:59:59-05:00").getTime();
+  var L = limites_();
+  if (!L[i]) return Infinity;
+  var lim = new Date(L[i] + "T23:59:59-05:00").getTime();
   if (d && d.ext && /^\d{4}-\d{2}-\d{2}$/.test(d.ext)) lim = Math.max(lim, new Date(d.ext + "T23:59:59-05:00").getTime());
   return lim;
 }
 /* ¿Se puede seguir capturando la semana i? Sí, hasta el cierre general (fecha de la S8) o una prórroga posterior. */
 function plazoAbierto_(i, d) {
-  if (!LIMITES[i]) return true;
-  var cierre = new Date(LIMITES[LIMITES.length - 1] + "T23:59:59-05:00").getTime();
+  var L = limites_();
+  if (!L[i]) return true;
+  var cierre = new Date(L[L.length - 1] + "T23:59:59-05:00").getTime();
   return Date.now() <= Math.max(venceMs_(i, d), cierre);
 }
 /* Nombres de organización normalizados para comparar ("Café Ñ" = "cafe-n"). */
@@ -625,17 +628,40 @@ function generarResumenSiCambio() {
   P.setProperty("REV_RESUMEN", rev);
 }
 var PESOS = [0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1, 0.15], PESO_PITCH = 0.1;
-/* Calendario de entregas S1 a S8, del 12 de octubre al 24 de noviembre de 2026. S8 = PROYECTO FINAL (martes 24 de noviembre).
-   Cada entrega cierra ese día a las 23:59 (hora de Cancún). Es la ÚNICA fuente de fechas: la página
-   las recibe al abrir, así que para mover una fecha basta con cambiarla aquí y crear una nueva versión. */
+/* Calendario de entregas S1 a S8 (S8 = PROYECTO FINAL). Cada entrega cierra ese día a las 23:59 (hora de Cancún).
+   LIMITES son las fechas ORIGINALES. Las fechas vigentes se cambian desde la página:
+   Panel docente → «Calendario de entregas» (se guardan en las propiedades del script, sin tocar este código).
+   «Restaurar fechas originales» vuelve a LIMITES. Cambiar fechas no modifica nada de lo capturado ni entregado. */
 var LIMITES = ["2026-10-18", "2026-10-25", "2026-11-01", "2026-11-05", "2026-11-10", "2026-11-15", "2026-11-19", "2026-11-24"];
+function fechasValidas_(v) {
+  return Array.isArray(v) && v.length === LIMITES.length && v.every(function (d, i) {
+    return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00:00-05:00").getTime()) && (i === 0 || d >= v[i - 1]);
+  });
+}
+/* Fechas vigentes: las guardadas por la docente en el Panel docente; si no hay, las originales (LIMITES). */
+function limites_() {
+  try { var v = JSON.parse(PropertiesService.getScriptProperties().getProperty("CALENDARIO") || "null"); if (fechasValidas_(v)) return v; } catch (e) {}
+  return LIMITES;
+}
+/* Docente: guarda el calendario (8 fechas AAAA-MM-DD en orden) o, con fechas vacías, restaura LIMITES.
+   Solo cambia las fechas límite: no toca ningún documento, entrega, calificación ni prórroga. */
+function guardarCalendario_(fechas) {
+  var P = PropertiesService.getScriptProperties();
+  if (fechas == null || fechas === "" || (Array.isArray(fechas) && !fechas.length)) P.deleteProperty("CALENDARIO");
+  else if (!fechasValidas_(fechas)) return { ok: false, msg: "Fechas no válidas: deben ser 8, con formato AAAA-MM-DD y en orden (S1 ≤ S2 ≤ … ≤ S8)." };
+  else P.setProperty("CALENDARIO", JSON.stringify(fechas));
+  subirRev_();   // avisa a todas las páginas abiertas
+  try { generarResumen(); } catch (x) {}
+  return { ok: true, limites: limites_() };
+}
 function generarResumen() {
+  var LIM = limites_();
   CacheService.getScriptCache().remove("alumnos");
   var t = leerTodo_(), D = {};
   Object.keys(t.filas).forEach(function (p) { var d = parse_(t.filas[p].json); if (d != null) D[p] = d; });
   var enc = ["Grupo", "Equipo", "Nombre del equipo", "Organización elegida", "Tipo", "Contacto", "¿Aceptó?", "CEO (Director General)", "Integrantes (rol)", "Alternativas A · B · C"]
-    .concat(LIMITES.map(function (x, i) { return "S" + (i + 1); }))
-    .concat(LIMITES.map(function (x, i) { return "E" + (i + 1); }))
+    .concat(LIM.map(function (x, i) { return "S" + (i + 1); }))
+    .concat(LIM.map(function (x, i) { return "E" + (i + 1); }))
     .concat(["Pitch", "Puntos /80", "Nota /100", "Última edición"]);
   var filas = [enc], hoy = new Date();
   var ROL = SIGLAS;
@@ -644,7 +670,7 @@ function generarResumen() {
     var ids = Object.keys(mem).sort(function (a, b) { return mem[a].t - mem[b].t; });
     var rolesDe = function (id) { return Object.keys(tm.roles || {}).filter(function (r) { return tm.roles[r] === id; }).map(function (r) { return ROL[r] || r; }); };
     var el = tm.elegida && al[tm.elegida] && al[tm.elegida].n ? al[tm.elegida] : (tm.org && tm.org.n ? tm.org : null);
-    var est = LIMITES.map(function (lim, i) {
+    var est = LIM.map(function (lim, i) {
       var w = D["teams/" + n + "/w/" + i] || {}, fin = venceMs_(i, w);
       if (w.est === "Entregado") return w.at && w.at > fin ? "Tarde (" + Math.ceil((w.at - fin) / 864e5) + " d)" : "Entregado";
       return hoy.getTime() > fin ? (plazoAbierto_(i, w) ? "Vencida" : "No entregado") : "Pendiente";

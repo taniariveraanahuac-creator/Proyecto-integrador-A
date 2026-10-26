@@ -154,6 +154,7 @@
       if (r.full) { docs.forEach(function (d, p) { changed.push(p); }); docs.clear(); }
       (r.docs || []).forEach(function (pair) { var p = pair[0], d = pair[1]; if (d == null) docs.delete(p); else docs.set(p, d); changed.push(p); });
       if (r.rev != null) rev = r.rev;
+      if (r.limites) setLimites(r.limites);
       overlayPending(changed);
       if (changed.length) notify(changed);
       if (status.state === "offline" || status.state === "idle") setStatus(queue.length ? "saving" : "ok");
@@ -227,6 +228,12 @@
      ===================================================================== */
   var readyRes; var ready = new Promise(function (r) { readyRes = r; });
   var info = { roster: null, hoja: "" };
+  /* Calendario de entregas: lo envía el servidor y la docente lo puede cambiar desde el Panel docente. */
+  var calL = new Set();
+  function setLimites(l) {
+    if (!Array.isArray(l) || JSON.stringify(l) === JSON.stringify(info.limites || null)) return;
+    info.limites = l; calL.forEach(function (f) { try { f(l); } catch (e) {} });
+  }
   var sess = { rol: MODE === "local" ? "local" : "", nombre: "", grupo: "", equipo: 0, me: "", pub: null, max: 6 };
 
   function esc(t) { return String(t || "").replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -304,6 +311,7 @@
       loadLocal();
       isDocente = lsg(K.tok) === "local";
       info.roster = CFG.listaLocal || null;
+      try { var lc = JSON.parse(lsg("pi-calendario") || "null"); if (Array.isArray(lc)) info.limites = lc; } catch (e) {}
       readyRes();
       return ready.then(function () { return info; });
     }
@@ -346,6 +354,15 @@
     nuevaClave: MODE === "sheets" ? function (t) {
       return call({ a: "nuevaClave", t: t }).then(function (r) { if (r && r.ok && sess.claves) sess.claves[t] = r.clave; return r && r.ok ? r : { ok: false, msg: (r && (r.msg || r.err)) || "No se pudo generar la clave." }; });
     } : null,
+    /* Docente: cambia las 8 fechas límite (o con null restaura las originales). No toca lo capturado ni entregado. */
+    onCalendario: function (f) { calL.add(f); return function () { calL.delete(f); }; },
+    calendario: function (fechas) {
+      if (MODE === "local") { lss("pi-calendario", fechas ? JSON.stringify(fechas) : null); var orig = window.PI_CAL_ORIGINAL || null; setLimites(fechas || orig); return Promise.resolve({ ok: true, limites: fechas || orig }); }
+      return call({ a: "calendario", fechas: fechas || null }).then(function (r) {
+        if (r && r.ok) { setLimites(r.limites); return r; }
+        return { ok: false, msg: (r && (r.msg || r.err)) || "No se pudo guardar el calendario." };
+      });
+    },
     /* El alumno se une a un equipo de su grupo (lo valida el servidor). */
     join: MODE === "sheets" ? function (t) {
       return call({ a: "join", t: t }).then(function (r) {
