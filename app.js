@@ -303,6 +303,44 @@ function Avance({wdocs,setView}){
    return h("button",{key:i,className:"pill "+s.c,title:"S"+(i+1)+": "+s.l,onClick:setView?()=>{setView("s"+i);window.scrollTo(0,0);}:undefined,style:{cursor:setView?"pointer":"default",textAlign:"center",padding:"6px 0",font:"700 .78rem var(--sans)"}},"S"+(i+1));})),
   h("p",{className:"sm",style:{marginTop:8}},h("b",null,n+" de 8 entregas")," marcadas.",nx>=0?[" Próxima: ",h("b",{key:1},"S"+(nx+1)+" · "+fdl(W[nx].d)),"."]:" ¡Todas entregadas!"));
 }
+/* ---------- Perfil de la organización (desde la S3 y hasta el cierre del proyecto) ----------
+   Misión, visión, valores, estructura, políticas y normas REALES de la organización elegida.
+   Se guarda en el documento del equipo (tm.perfil): no toca ninguna entrega ya hecha. */
+const PERFIL=[
+ ["mis","Misión","Tal como la tiene escrita la organización: qué hace, para quién y cómo."],
+ ["vis","Visión","Lo que la organización quiere llegar a ser y en qué plazo."],
+ ["val","Valores","Los valores que declara (y, si los conocen, cómo se viven en la práctica)."],
+ ["estr","Estructura organizacional","Áreas o departamentos, puestos clave, niveles jerárquicos y a quién reporta cada área. Número aproximado de colaboradores."],
+ ["pol","Políticas","Políticas que guían decisiones: atención al cliente, calidad, compras, recursos humanos, precios, etc."],
+ ["nor","Normas y reglamentos","Reglamento interno, normas de conducta, horarios, seguridad, uniformes, código de ética, normas oficiales (NOM) que les aplican, etc."]];
+const PERFIL_ORIGEN=["Documento oficial de la organización","Página web o redes de la organización","Entrevista con el dueño o responsable","No existe formalmente: lo redactamos con lo que nos explicaron"];
+const PERFIL_DESDE=2; // S3: se pide desde esta semana y en todas las siguientes
+const perfilCampoOk=(pf,k)=>str(pf&&pf[k]).trim().length>=20&&!!str(pf&&pf["o_"+k]);
+const perfilCuenta=tm=>PERFIL.filter(([k])=>perfilCampoOk(tm&&tm.perfil,k)).length;
+const perfilOk=tm=>perfilCuenta(tm)===PERFIL.length&&str(tm&&tm.perfil&&tm.perfil.src).trim().length>=25;
+function PerfilOrg({tm,wm,canEdit}){
+ const pf=tm.perfil||{},n=perfilCuenta(tm),ok=perfilOk(tm),e=empOfTeam(tm);
+ return h("details",{className:"card",open:!ok,style:{borderColor:ok?"var(--okt)":"var(--or)"}},
+  h("summary",{style:{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}},h("span",{className:"pill "+(ok?"ok":"wa")},ok?"✓ Completo":n+" de "+PERFIL.length),
+   h("span",{style:{fontSize:"1.05rem",fontWeight:700}},"🏢 Perfil de la organización"+(e?": "+e.n:"")),
+   !ok?h("span",{className:"sm mut"},"Obligatorio desde la S3 ("+fdl(W[PERFIL_DESDE].d)+") y hasta el proyecto final"):null),
+  h("p",{className:"sm",style:{marginTop:10}},"Registren la ",h("b",null,"misión, visión, valores, estructura organizacional, políticas y normas reales")," de su organización. Lo que escriban aquí aparece en el documento de la S3, en el proyecto final y en el reporte completo, y pueden actualizarlo hasta el cierre del proyecto. Indiquen de dónde salió cada dato; si la organización no lo tiene por escrito, redáctenlo con lo que les explicó el dueño y márquenlo así."),
+  PERFIL.map(([k,l,ph])=>h("div",{key:k,className:"sec",style:{marginTop:10}},
+   h(Field,{id:"pf"+k,l:l+(perfilCampoOk(pf,k)?" ✓":""),area:true,v:pf[k],ro:!canEdit,ph,on:v=>wm(["perfil",k],v)}),
+   h("label",{className:"l sm",htmlFor:"pfo"+k,style:{marginTop:4}},"¿De dónde lo obtuvieron?"),
+   h("select",{id:"pfo"+k,value:str(pf["o_"+k]),disabled:!canEdit,onChange:e=>wm(["perfil","o_"+k],e.target.value,0)},h("option",{value:""},"Selecciona…"),PERFIL_ORIGEN.map(o=>h("option",{key:o,value:o},o))))),
+  h("div",{className:"g2",style:{marginTop:10}},
+   h(Field,{id:"pforg",l:"Liga al organigrama (opcional: foto o archivo en Drive)",v:pf.organigrama,ro:!canEdit,on:v=>wm(["perfil","organigrama"],v),ph:"https://…"}),
+   h(Field,{id:"pfsrc",l:"Fuentes en APA 7"+(str(pf.src).trim().length>=25?" ✓":""),area:true,v:pf.src,ro:!canEdit,on:v=>wm(["perfil","src"],v),ph:"Ej.: Hotel X. (2026). Misión y visión. https://… · Pérez, A. (2026, 20 de octubre). Comunicación personal [entrevista]."})));
+}
+/* Versión para documentos y PDF. */
+function PerfilDoc({tm}){
+ const pf=(tm&&tm.perfil)||{},u=/^https?:\/\/\S+/.test(str(pf.organigrama).trim());
+ return h("div",{className:"w"},h("table",null,h("tbody",null,
+  PERFIL.map(([k,l])=>h("tr",{key:k},h("th",{className:"g",style:{textAlign:"left",width:"26%"}},l,str(pf["o_"+k])?h("div",{className:"sm",style:{fontWeight:400}},str(pf["o_"+k])):null),h("td",{style:{whiteSpace:"pre-wrap"}},str(pf[k]).trim()||"—"))),
+  h("tr",null,h("th",{className:"g",style:{textAlign:"left"}},"Organigrama"),h("td",null,u?h("a",{href:pf.organigrama,target:"_blank",rel:"noopener"},pf.organigrama):"—")),
+  h("tr",null,h("th",{className:"g",style:{textAlign:"left"}},"Fuentes"),h("td",{style:{whiteSpace:"pre-wrap"}},str(pf.src).trim()||"—")))));
+}
 function FichaOrg({o}){
  const r=(l,v)=>h("tr",null,h("th",{className:"g",style:{textAlign:"left",width:"34%"}},l),h("td",null,str(v)||"—"));
  return h("div",{className:"w"},h("table",null,h("tbody",null,r("Organización",o.n),r("Tipo",o.tipo),r("Giro y ubicación",[o.giro,o.ubi].filter(Boolean).join(" · ")),
@@ -318,6 +356,7 @@ function Equipo(p){const {t,tm,me,isAdmin,wdocs,setView,wm}=p,e=empOfTeam(tm),al
    h("div",{className:"g2",style:{marginTop:8}},h(Field,{id:"tnom",l:"Nombre del equipo (opcional)",v:tm.nombre,ro:!canEdit,on:v=>wm(["nombre"],v),ph:"Ej.: Consejo Delta"}),
     h(Field,{id:"tcan",l:"Canal de comunicación del equipo (opcional)",v:tm.canal,ro:!canEdit,on:v=>wm(["canal"],v),ph:"Ej.: grupo de WhatsApp «PI Delta»"})),
    h(Avance,{wdocs,setView})),
+  e?h(PerfilOrg,{tm,wm,canEdit}):null,
   h(Ruta,p),
   h(Integrantes,p));
 }
@@ -557,6 +596,7 @@ function DocEntrega({wi,t,tm,wd,cover}){
     h("b",null,"Fecha de entrega: "),d.est==="Entregado"&&d.at?fmt(d.at):"sin entregar"," · ",h("b",null,"Docente: "),"Mtra. Tania Rivera Lozano")):
    h("h3",{className:"sec",style:{fontSize:"1.15rem",borderBottom:"2px solid var(--or)",paddingBottom:4}},"S"+(wi+1)+" · "+w.t),
   H("1. Objetivo de la entrega"),h("p",null,w.q),
+  (wi===PERFIL_DESDE||w.fin)&&cover!==false?h("div",null,H("Perfil de la organización"+(e?": "+e.n:"")),h(PerfilDoc,{tm})):null,
   H("2. Desarrollo"),
   w.tx.map((x,i)=>h("div",{key:i,className:"sec"},h("h4",{style:{margin:"8px 0 2px"}},"2."+(i+1)+" "+x),h("p",{style:{whiteSpace:"pre-wrap"}},str(d.t&&d.t[i])||"Sin capturar"))),
   wi===0?(altsOf(tm).length?h("div",{className:"sec"},h("h4",{style:{margin:"10px 0 2px"}},"2."+(w.tx.length+1)+" Análisis comparativo de las tres alternativas"),
@@ -740,6 +780,7 @@ const PASOS_EQUIPO=[
  ["Sigan la ruta de «Mi equipo»","Cinco pasos para elegir la organización: asumir roles; el CEO hace el sorteo de las alternativas A y B y el equipo propone la C; contactar a las tres; compararlas con la matriz ponderada y el análisis cualitativo; elegir una y justificarla."],
  ["Capturen cada semana (S1 a S8)","Abran la pestaña de la semana, lean el objetivo y el ejemplo, y llenen las 5 secciones del formato estándar. Todo se guarda solo mientras escriben y lo ve el resto del equipo en segundos."],
  ["Escribe desde tu rol directivo","En «Perspectiva de cada rol directivo», cada integrante responde la pregunta de su rol (CEO, COO, CFO, CMO, CHRO o CIO). Solo tú puedes escribir en tu recuadro; aparece en el PDF y la docente lo evalúa."],
+ ["Completen el perfil de su organización (desde la S3)","En «Mi equipo» → «🏢 Perfil de la organización», registren la misión, visión, valores, estructura organizacional, políticas y normas reales de su organización, de dónde obtuvieron cada dato y sus fuentes. Es obligatorio desde la S3, aparece en los documentos de la S3, del proyecto final y en el reporte, y pueden actualizarlo hasta el cierre del proyecto."],
  ["Entreguen antes de cada fecha límite (23:59)","Cuando la lista de verificación esté completa, el CEO presiona «Marcar como entregada». Después de la fecha límite la semana queda VENCIDA: todavía pueden capturar y entregar hasta el cierre del proyecto (fecha de la S8), pero la entrega queda registrada como tardía con los días de retraso."],
  ["Descarguen el PDF y súbanlo a Brightspace","En «Documento de entrega», cada integrante descarga el PDF de la semana y lo sube a Brightspace. «Reporte» reúne las 8 entregas."],
  ["Entreguen el PROYECTO FINAL (S8)","El "+"martes 24 de noviembre a las 23:59: documento final integrado (PDF de «Reporte» con S1 a S8), presentación del pitch y evidencia de que compartieron la propuesta con la organización. Las ligas se pegan en la S8."],
@@ -809,6 +850,7 @@ function checklist(wi,wd,tm){const w=W[wi],d=wd||{};const it=[
  it.push(["Conclusión para la propuesta de mejora (mínimo 60 caracteres)",str(d.concl).trim().length>=60]);
  it.push(["Al menos una fuente en APA 7",str(d.src).trim().length>=25]);
  const ra=rolesAsumidos(tm);if(ra.length)it.push(["Aporte de cada rol directivo asumido (mínimo 40 caracteres cada uno)",ra.every(([r])=>str(d.rol&&d.rol[r.k]).trim().length>=40)]);
+ if(wi>=PERFIL_DESDE)it.push(["Perfil de la organización completo en «Mi equipo»: misión, visión, valores, estructura, políticas, normas y fuentes",perfilOk(tm)]);
  if(wi===0)it.push(["Organización elegida en «Mi equipo» tras analizar las tres alternativas (paso 5)",!!(tm&&tm.elegida&&empOfTeam(tm))]);
  if(w.fin){const u=x=>/^https?:\/\/\S+\.\S+/.test(str(x).trim());
   it.push(["Presentación del pitch (liga a las diapositivas)",u(d.pres)]);
@@ -993,6 +1035,7 @@ function Reporte({t,tm,wdocs,myName}){
     h("p",null,h("b",null,"Grupo y equipo: "),tLab(t),myName?[h("br",{key:1}),h("b",{key:2},"Descargado por: "),myName]:null,h("br"),h("b",null,"Docente: "),"Mtra. Tania Rivera Lozano · ",new Date().toLocaleDateString("es-MX")),
     h("div",{className:"w",style:{marginTop:8}},h("table",null,h("thead",null,h("tr",null,h("th",null,"Integrante"),h("th",null,"Rol directivo"))),
      h("tbody",null,ms.map(([id,x])=>h("tr",{key:id},h("td",null,x.n),h("td",null,rolesOf(tm,id).join(", ")||"Sin rol"))))))),
+   h("div",{className:"sec",style:{marginTop:14}},h("h3",{style:{color:"var(--ord)"}},"Perfil de la organización"),h(PerfilDoc,{tm})),
    W.map((w,i)=>h("div",{key:i,style:{marginTop:18}},h(DocEntrega,{wi:i,t,tm,wd:wdocs[i]||{},cover:false})))));
 }
 
@@ -1341,10 +1384,11 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
       h("td",null,dn?(conf===key?h("span",{className:"row"},h("button",{className:"btn sm",onClick:()=>{releaseDraw(n);setConf("");}},"Sí, liberar"),h("button",{className:"btn alt sm",onClick:()=>setConf("")},"No")):h("button",{className:"btn alt sm",onClick:()=>setConf(key)},"Liberar para resortear")):null));})))),
    h("p",{className:"sm mut"},"«Liberar para resortear» devuelve sus dos organizaciones al sorteo y borra las casillas A y B del equipo; la C y la elección se conservan.")),
   h("div",{className:"card"},h("h2",null,"Organizaciones elegidas · "+G.n),
-   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Alternativas completas"),h("th",null,"Elegida"),h("th",null,"Contacto"),h("th",null,"Evidencia"),h("th",null,""))),
+   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Alternativas completas"),h("th",null,"Elegida"),h("th",null,"Contacto"),h("th",null,"Evidencia"),h("th",null,"Perfil"),h("th",null,""))),
     h("tbody",null,TT.map(n=>{const tm=teams[n],e=empOfTeam(tm),okc=altsOf(tm).filter(([,a])=>altOk(a)).length,ev=str(tm&&tm.evid);
      return h("tr",{key:n},h("td",{className:"c"},loc(n)),h("td",{className:"c "+(okc>=3?"ok":okc?"wa":"")},okc),h("td",null,e?h("div",null,h("b",null,e.n),h("div",{className:"sm mut"},str(e.tipo))):"—"),h("td",null,e?str(e.contacto):"—"),
       h("td",null,/^https?:\/\//.test(ev)?h("a",{href:ev,target:"_blank",rel:"noopener"},"Abrir"):"—"),
+      h("td",{className:"c "+(perfilOk(tm)?"ok":perfilCuenta(tm)?"wa":""),title:"Misión, visión, valores, estructura, políticas y normas"},perfilOk(tm)?"✓":perfilCuenta(tm)+"/"+PERFIL.length),
       h("td",null,e?(conf===String(n)?h("span",{className:"row"},h("button",{className:"btn sm",onClick:()=>{reopen(n);setConf("");}},"Sí, reabrir"),h("button",{className:"btn alt sm",onClick:()=>setConf("")},"No")):h("button",{className:"btn alt sm",onClick:()=>setConf(String(n))},"Reabrir selección")):null));})))),
    h("p",{className:"sm mut"},"«Reabrir selección» permite al equipo elegir otra organización; sus alternativas se conservan.")),
   h("div",null,h("h2",null,"Calificaciones y nota final ponderada"),
