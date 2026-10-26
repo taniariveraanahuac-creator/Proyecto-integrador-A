@@ -307,37 +307,79 @@ function Avance({wdocs,setView}){
    Misión, visión, valores, estructura, políticas y normas REALES de la organización elegida.
    Se guarda en el documento del equipo (tm.perfil): no toca ninguna entrega ya hecha. */
 const PERFIL=[
- ["mis","Misión","Tal como la tiene escrita la organización: qué hace, para quién y cómo."],
- ["vis","Visión","Lo que la organización quiere llegar a ser y en qué plazo."],
- ["val","Valores","Los valores que declara (y, si los conocen, cómo se viven en la práctica)."],
- ["estr","Estructura organizacional","Áreas o departamentos, puestos clave, niveles jerárquicos y a quién reporta cada área. Número aproximado de colaboradores."],
- ["pol","Políticas","Políticas que guían decisiones: atención al cliente, calidad, compras, recursos humanos, precios, etc."],
- ["nor","Normas y reglamentos","Reglamento interno, normas de conducta, horarios, seguridad, uniformes, código de ética, normas oficiales (NOM) que les aplican, etc."]];
+ ["mis","Misión","Tal como la tiene escrita la organización: qué hace, para quién y cómo.",{
+  c:["Quiénes son (tipo de organización)","Qué hacen: productos o servicios","Para quién: sus clientes o usuarios","Cómo lo hacen o qué los distingue","Para qué: el beneficio que generan"],
+  e:"«Somos [tipo de organización] que [ofrece qué] a [quién], mediante [cómo / qué nos distingue], para [beneficio o propósito].» Se escribe en presente, en 2 a 4 líneas, sin cifras ni fechas.",
+  x:"Somos una cafetería de especialidad en Cancún que ofrece café de productores de Chiapas y Veracruz y repostería artesanal a residentes y visitantes, con un servicio cálido y ágil, para que cada visita sea una pausa agradable que además impulse el comercio justo con los caficultores mexicanos."}],
+ ["vis","Visión","Lo que la organización quiere llegar a ser y en qué plazo.",{
+  c:["A dónde quiere llegar la organización (aspiración)","En qué plazo (año)","Alcance: lugar o mercado","Por qué quiere ser reconocida","De preferencia, una meta que se pueda verificar"],
+  e:"«Ser [la posición que aspira] en [mercado o lugar] para [año], reconocida por [atributo].» Se escribe en futuro, es retadora pero alcanzable y cabe en 2 o 3 líneas.",
+  x:"Ser en 2030 la cafetería de especialidad preferida de Cancún y la Riviera Maya, con tres sucursales propias, reconocida por la calidad de su café, la atención de su personal y su compromiso con los productores mexicanos."}],
+ ["val","Valores","Los valores que declara (y, si los conocen, cómo se viven en la práctica).",{
+  c:["De 3 a 6 valores, no más","El nombre de cada valor","Una definición breve de cada uno","Cómo se nota en el día a día (una conducta observable)"],
+  e:"Una lista: «Valor: qué significa para nosotros y cómo lo vivimos.» Eviten listas largas de palabras sueltas; cada valor debe poder verse en el trabajo diario.",
+  x:"Servicio cálido: saludamos a cada cliente y resolvemos sus dudas con paciencia.\nCalidad: preparamos cada bebida con la receta estándar y desechamos lo que no cumple.\nHonestidad: informamos con claridad precios, ingredientes y tiempos de espera.\nTrabajo en equipo: cubrimos al compañero que lo necesita sin esperar a que nos lo pidan.\nCuidado del ambiente: usamos vasos compostables y separamos los residuos."}],
+ ["fil","Filosofía empresarial","Las creencias y principios que orientan cómo trabaja la organización y su compromiso con clientes, colaboradores, proveedores y comunidad.",{
+  c:["Las creencias o principios que guían a la organización","Cómo se relacionan la misión, la visión y los valores","Sus compromisos con cada grupo de interés: clientes, colaboradores, proveedores, comunidad y ambiente","Lo que la organización NO está dispuesta a hacer"],
+  e:"Un párrafo de 3 a 5 líneas con las creencias de fondo, seguido de un compromiso por cada grupo de interés: «Con nuestros clientes…», «Con nuestros colaboradores…», etc.",
+  x:"Creemos que un buen negocio se construye con relaciones justas y duraderas: por eso preferimos crecer despacio antes que sacrificar la calidad o el trato a las personas.\nCon nuestros clientes: ofrecer productos frescos a un precio justo.\nCon nuestros colaboradores: capacitación, horarios claros y un trato respetuoso.\nCon nuestros proveedores: pagos puntuales y compras directas a pequeños productores.\nCon la comunidad y el ambiente: reducir residuos y apoyar actividades culturales del barrio."}],
+ ["estr","Estructura organizacional y organigrama","Áreas o departamentos, puestos clave, niveles jerárquicos y a quién reporta cada área. Número aproximado de colaboradores.",{
+  c:["Tipo de estructura (funcional, por producto, por sucursal, etc.)","Niveles jerárquicos: dirección, mandos medios y operativos","Áreas o departamentos y sus puestos","Quién reporta a quién (línea de autoridad)","Áreas de apoyo o servicios externos (contabilidad, sistemas)","Número aproximado de colaboradores por área"],
+  e:"Describan en texto cada nivel de arriba hacia abajo (puesto → a quién reporta → cuántas personas) y elaboren el organigrama: cajas por puesto, la dirección arriba, líneas verticales para la autoridad y las áreas de apoyo a un lado. Pueden hacerlo en Canva, PowerPoint o a mano (foto) y pegar la liga abajo.",
+  x:"Estructura funcional con 3 niveles y 9 colaboradores.\nNivel 1: Dueña y directora general.\nNivel 2: Gerente de tienda (reporta a la dirección).\nNivel 3: 4 baristas, 2 en cocina y repostería y 1 en caja (reportan al gerente).\nApoyo externo: despacho contable (asesora a la dirección)."}],
+ ["pol","Políticas","Políticas que guían decisiones: atención al cliente, calidad, compras, recursos humanos, precios, etc.",{
+  c:["Guías generales que orientan decisiones (no son castigos)","Al menos una por área: clientes, calidad, compras, personal, finanzas","Deben ser coherentes con la misión y los valores"],
+  e:"Una por renglón, con el área primero: «Área: la organización [garantiza / prioriza / procura]…». La política dice el criterio; la norma, la regla concreta.",
+  x:"Atención al cliente: toda queja se atiende y responde el mismo día.\nCalidad: solo se usa café con menos de 30 días de tostado.\nCompras: se prefiere a proveedores locales y se comparan al menos dos cotizaciones.\nPersonal: toda persona que ingresa recibe una semana de capacitación pagada.\nPrecios: los precios se revisan cada seis meses con base en costos."}],
+ ["nor","Normas y reglamentos","Reglamento interno, normas de conducta, horarios, seguridad, uniformes, código de ética, normas oficiales (NOM) que les aplican, etc.",{
+  c:["Reglas obligatorias y concretas de conducta y operación","Horarios, uniforme, higiene, seguridad, uso de equipo","Qué pasa si no se cumplen (consecuencia)","Normas oficiales que aplican al giro (por ejemplo, NOM, Protección Civil)"],
+  e:"Una por renglón, en obligación: «Todo colaborador debe / no debe… ; en caso contrario…». Agreguen las normas oficiales del giro con su clave.",
+  x:"Todo colaborador debe llegar 10 minutos antes de su turno; tres retardos al mes generan un acta administrativa.\nEs obligatorio usar cofia, mandil y uñas cortas en barra y cocina.\nNo se permite el uso del celular en el área de atención al cliente.\nLa limpieza de equipos se registra en la bitácora diaria.\nNorma oficial aplicable: NOM-251-SSA1-2009, prácticas de higiene para el proceso de alimentos."}]];
 const PERFIL_ORIGEN=["Documento oficial de la organización","Página web o redes de la organización","Entrevista con el dueño o responsable","No existe formalmente: lo redactamos con lo que nos explicaron"];
 const PERFIL_DESDE=2; // S3: se pide desde esta semana y en todas las siguientes
-const perfilCampoOk=(pf,k)=>str(pf&&pf[k]).trim().length>=20&&!!str(pf&&pf["o_"+k]);
+/* Modo de cada elemento: "tiene" (la organización lo tiene y el equipo lo integra) o "pro" (no lo tiene y el equipo lo propone).
+   Compatibilidad: si antes eligieron el origen «No existe formalmente…», cuenta como propuesta. */
+const perfilModo=(pf,k)=>str(pf&&pf["t_"+k])||(str(pf&&pf["o_"+k])===PERFIL_ORIGEN[3]?"pro":str(pf&&pf["o_"+k])?"tiene":"");
+const perfilCampoOk=(pf,k)=>{const m=perfilModo(pf,k);if(str(pf&&pf[k]).trim().length<20)return false;
+ return m==="tiene"?PERFIL_ORIGEN.slice(0,3).includes(str(pf["o_"+k])):m==="pro"?str(pf["j_"+k]).trim().length>=20:false;};
 const perfilCuenta=tm=>PERFIL.filter(([k])=>perfilCampoOk(tm&&tm.perfil,k)).length;
 const perfilOk=tm=>perfilCuenta(tm)===PERFIL.length&&str(tm&&tm.perfil&&tm.perfil.src).trim().length>=25;
+function GuiaPerfil({g}){
+ return h("details",{className:"ex",style:{marginTop:6}},h("summary",{className:"sm"},"📘 Qué debe contener, cómo se estructura y ejemplo"),
+  h("p",{className:"sm",style:{margin:"8px 0 2px"}},h("b",null,"Debe contener:")),h("ul",{className:"sm",style:{margin:0,paddingLeft:"1.2em"}},g.c.map((x,i)=>h("li",{key:i},x))),
+  h("p",{className:"sm",style:{margin:"8px 0 2px"}},h("b",null,"Cómo se estructura: "),g.e),
+  h("p",{className:"sm",style:{margin:"8px 0 2px"}},h("b",null,"Ejemplo (cafetería ficticia):")),h("p",{className:"sm",style:{whiteSpace:"pre-wrap",margin:0,fontStyle:"italic"}},g.x));
+}
 function PerfilOrg({tm,wm,canEdit}){
  const pf=tm.perfil||{},n=perfilCuenta(tm),ok=perfilOk(tm),e=empOfTeam(tm);
+ const modo=(k,m)=>{wm(["perfil","t_"+k],m,0);if(m==="tiene"&&str(pf["o_"+k])===PERFIL_ORIGEN[3])wm(["perfil","o_"+k],"",0);};
  return h("details",{className:"card",open:!ok,style:{borderColor:ok?"var(--okt)":"var(--or)"}},
   h("summary",{style:{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}},h("span",{className:"pill "+(ok?"ok":"wa")},ok?"✓ Completo":n+" de "+PERFIL.length),
    h("span",{style:{fontSize:"1.05rem",fontWeight:700}},"🏢 Perfil de la organización"+(e?": "+e.n:"")),
    !ok?h("span",{className:"sm mut"},"Obligatorio desde la S3 ("+fdl(W[PERFIL_DESDE].d)+") y hasta el proyecto final"):null),
-  h("p",{className:"sm",style:{marginTop:10}},"Registren la ",h("b",null,"misión, visión, valores, estructura organizacional, políticas y normas reales")," de su organización. Lo que escriban aquí aparece en el documento de la S3, en el proyecto final y en el reporte completo, y pueden actualizarlo hasta el cierre del proyecto. Indiquen de dónde salió cada dato; si la organización no lo tiene por escrito, redáctenlo con lo que les explicó el dueño y márquenlo así."),
-  PERFIL.map(([k,l,ph])=>h("div",{key:k,className:"sec",style:{marginTop:10}},
-   h(Field,{id:"pf"+k,l:l+(perfilCampoOk(pf,k)?" ✓":""),area:true,v:pf[k],ro:!canEdit,ph,on:v=>wm(["perfil",k],v)}),
-   h("label",{className:"l sm",htmlFor:"pfo"+k,style:{marginTop:4}},"¿De dónde lo obtuvieron?"),
-   h("select",{id:"pfo"+k,value:str(pf["o_"+k]),disabled:!canEdit,onChange:e=>wm(["perfil","o_"+k],e.target.value,0)},h("option",{value:""},"Selecciona…"),PERFIL_ORIGEN.map(o=>h("option",{key:o,value:o},o))))),
-  h("div",{className:"g2",style:{marginTop:10}},
-   h(Field,{id:"pforg",l:"Liga al organigrama (opcional: foto o archivo en Drive)",v:pf.organigrama,ro:!canEdit,on:v=>wm(["perfil","organigrama"],v),ph:"https://…"}),
+  h("p",{className:"sm",style:{marginTop:10}},"Registren la ",h("b",null,"misión, visión, valores, filosofía empresarial, estructura y organigrama, políticas y normas")," de su organización. En cada elemento indiquen si ",h("b",null,"la organización lo tiene"),", y entonces lo integran tal cual y dicen de dónde lo obtuvieron, o si ",h("b",null,"no lo tiene"),", y entonces el equipo lo propone y explica en qué se basó. Abran «📘 Qué debe contener…» para ver la estructura y un ejemplo. Lo que escriban aparece en la S3, en el proyecto final y en el reporte, y pueden actualizarlo hasta el cierre del proyecto."),
+  PERFIL.map(([k,l,ph,g])=>{const m=perfilModo(pf,k);
+   return h("div",{key:k,className:"sec",style:{marginTop:14,paddingTop:10,borderTop:"1px solid var(--line)"}},
+    h("div",{className:"bar"},h("b",{style:{fontSize:"1.02rem"}},l+(perfilCampoOk(pf,k)?" ✓":"")),m?h("span",{className:"pill "+(m==="pro"?"wa":"ok")},m==="pro"?"Propuesta del equipo":"La organización lo tiene"):null),
+    h("div",{className:"row",role:"radiogroup","aria-label":"¿La organización tiene "+l.toLowerCase()+"?",style:{marginTop:6}},
+     h("button",{type:"button",role:"radio","aria-checked":m==="tiene",className:"btn sm "+(m==="tiene"?"":"alt"),disabled:!canEdit,onClick:()=>modo(k,"tiene")},"✔ La organización lo tiene: lo integramos"),
+     h("button",{type:"button",role:"radio","aria-checked":m==="pro",className:"btn sm "+(m==="pro"?"":"alt"),disabled:!canEdit,onClick:()=>modo(k,"pro")},"✎ No lo tiene: lo proponemos")),
+    h(GuiaPerfil,{g}),
+    m?h(Field,{id:"pf"+k,l:m==="pro"?"Nuestra propuesta de "+l.toLowerCase():"Texto tal como lo tiene la organización",area:true,v:pf[k],ro:!canEdit,ph,on:v=>wm(["perfil",k],v)}):null,
+    m==="tiene"?h("div",null,h("label",{className:"l sm",htmlFor:"pfo"+k,style:{marginTop:4}},"¿De dónde lo obtuvieron?"),
+     h("select",{id:"pfo"+k,value:PERFIL_ORIGEN.slice(0,3).includes(str(pf["o_"+k]))?str(pf["o_"+k]):"",disabled:!canEdit,onChange:ev=>wm(["perfil","o_"+k],ev.target.value,0)},h("option",{value:""},"Selecciona…"),PERFIL_ORIGEN.slice(0,3).map(o=>h("option",{key:o,value:o},o)))):null,
+    m==="pro"?h(Field,{id:"pfj"+k,l:"¿En qué se basaron para proponerlo? (lo que les explicó el dueño, lo que observaron, cómo lo validaron)",area:true,v:pf["j_"+k],ro:!canEdit,on:v=>wm(["perfil","j_"+k],v),ph:"Ej.: La dueña nos explicó que su prioridad es… Lo revisamos con ella el 28 de octubre y estuvo de acuerdo."}):null,
+    k==="estr"&&m?h(Field,{id:"pforg",l:"Liga al organigrama"+(m==="pro"?" propuesto":"")+" (foto o archivo en Drive, Canva o PowerPoint)",v:pf.organigrama,ro:!canEdit,on:v=>wm(["perfil","organigrama"],v),ph:"https://…"}):null);}),
+  h("div",{style:{marginTop:14,paddingTop:10,borderTop:"1px solid var(--line)"}},
    h(Field,{id:"pfsrc",l:"Fuentes en APA 7"+(str(pf.src).trim().length>=25?" ✓":""),area:true,v:pf.src,ro:!canEdit,on:v=>wm(["perfil","src"],v),ph:"Ej.: Hotel X. (2026). Misión y visión. https://… · Pérez, A. (2026, 20 de octubre). Comunicación personal [entrevista]."})));
 }
 /* Versión para documentos y PDF. */
 function PerfilDoc({tm}){
  const pf=(tm&&tm.perfil)||{},u=/^https?:\/\/\S+/.test(str(pf.organigrama).trim());
+ const etiqueta=k=>{const m=perfilModo(pf,k);return m==="pro"?"Propuesta del equipo":m==="tiene"?"La organización lo tiene"+(PERFIL_ORIGEN.slice(0,3).includes(str(pf["o_"+k]))?" · "+pf["o_"+k]:""):"";};
  return h("div",{className:"w"},h("table",null,h("tbody",null,
-  PERFIL.map(([k,l])=>h("tr",{key:k},h("th",{className:"g",style:{textAlign:"left",width:"26%"}},l,str(pf["o_"+k])?h("div",{className:"sm",style:{fontWeight:400}},str(pf["o_"+k])):null),h("td",{style:{whiteSpace:"pre-wrap"}},str(pf[k]).trim()||"—"))),
+  PERFIL.map(([k,l])=>h("tr",{key:k},h("th",{className:"g",style:{textAlign:"left",width:"26%"}},l,etiqueta(k)?h("div",{className:"sm",style:{fontWeight:400}},etiqueta(k)):null),
+   h("td",{style:{whiteSpace:"pre-wrap"}},str(pf[k]).trim()||"—",perfilModo(pf,k)==="pro"&&str(pf["j_"+k]).trim()?h("div",{className:"sm mut",style:{marginTop:4}},h("b",null,"Fundamento: "),pf["j_"+k]):null))),
   h("tr",null,h("th",{className:"g",style:{textAlign:"left"}},"Organigrama"),h("td",null,u?h("a",{href:pf.organigrama,target:"_blank",rel:"noopener"},pf.organigrama):"—")),
   h("tr",null,h("th",{className:"g",style:{textAlign:"left"}},"Fuentes"),h("td",{style:{whiteSpace:"pre-wrap"}},str(pf.src).trim()||"—")))));
 }
@@ -780,7 +822,7 @@ const PASOS_EQUIPO=[
  ["Sigan la ruta de «Mi equipo»","Cinco pasos para elegir la organización: asumir roles; el CEO hace el sorteo de las alternativas A y B y el equipo propone la C; contactar a las tres; compararlas con la matriz ponderada y el análisis cualitativo; elegir una y justificarla."],
  ["Capturen cada semana (S1 a S8)","Abran la pestaña de la semana, lean el objetivo y el ejemplo, y llenen las 5 secciones del formato estándar. Todo se guarda solo mientras escriben y lo ve el resto del equipo en segundos."],
  ["Escribe desde tu rol directivo","En «Perspectiva de cada rol directivo», cada integrante responde la pregunta de su rol (CEO, COO, CFO, CMO, CHRO o CIO). Solo tú puedes escribir en tu recuadro; aparece en el PDF y la docente lo evalúa."],
- ["Completen el perfil de su organización (desde la S3)","En «Mi equipo» → «🏢 Perfil de la organización», registren la misión, visión, valores, estructura organizacional, políticas y normas reales de su organización, de dónde obtuvieron cada dato y sus fuentes. Es obligatorio desde la S3, aparece en los documentos de la S3, del proyecto final y en el reporte, y pueden actualizarlo hasta el cierre del proyecto."],
+ ["Completen el perfil de su organización (desde la S3)","En «Mi equipo» → «🏢 Perfil de la organización», registren la misión, visión, valores, filosofía empresarial, estructura y organigrama, políticas y normas de su organización: si la organización los tiene, los integran indicando de dónde salieron; si no, los proponen y explican en qué se basaron (cada elemento trae guía y ejemplo). Es obligatorio desde la S3, aparece en los documentos de la S3, del proyecto final y en el reporte, y pueden actualizarlo hasta el cierre del proyecto."],
  ["Entreguen antes de cada fecha límite (23:59)","Cuando la lista de verificación esté completa, el CEO presiona «Marcar como entregada». Después de la fecha límite la semana queda VENCIDA: todavía pueden capturar y entregar hasta el cierre del proyecto (fecha de la S8), pero la entrega queda registrada como tardía con los días de retraso."],
  ["Descarguen el PDF y súbanlo a Brightspace","En «Documento de entrega», cada integrante descarga el PDF de la semana y lo sube a Brightspace. «Reporte» reúne las 8 entregas."],
  ["Entreguen el PROYECTO FINAL (S8)","El "+"martes 24 de noviembre a las 23:59: documento final integrado (PDF de «Reporte» con S1 a S8), presentación del pitch y evidencia de que compartieron la propuesta con la organización. Las ligas se pegan en la S8."],
@@ -850,7 +892,7 @@ function checklist(wi,wd,tm){const w=W[wi],d=wd||{};const it=[
  it.push(["Conclusión para la propuesta de mejora (mínimo 60 caracteres)",str(d.concl).trim().length>=60]);
  it.push(["Al menos una fuente en APA 7",str(d.src).trim().length>=25]);
  const ra=rolesAsumidos(tm);if(ra.length)it.push(["Aporte de cada rol directivo asumido (mínimo 40 caracteres cada uno)",ra.every(([r])=>str(d.rol&&d.rol[r.k]).trim().length>=40)]);
- if(wi>=PERFIL_DESDE)it.push(["Perfil de la organización completo en «Mi equipo»: misión, visión, valores, estructura, políticas, normas y fuentes",perfilOk(tm)]);
+ if(wi>=PERFIL_DESDE)it.push(["Perfil de la organización completo en «Mi equipo»: misión, visión, valores, filosofía, estructura y organigrama, políticas, normas y fuentes",perfilOk(tm)]);
  if(wi===0)it.push(["Organización elegida en «Mi equipo» tras analizar las tres alternativas (paso 5)",!!(tm&&tm.elegida&&empOfTeam(tm))]);
  if(w.fin){const u=x=>/^https?:\/\/\S+\.\S+/.test(str(x).trim());
   it.push(["Presentación del pitch (liga a las diapositivas)",u(d.pres)]);
@@ -1388,7 +1430,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
     h("tbody",null,TT.map(n=>{const tm=teams[n],e=empOfTeam(tm),okc=altsOf(tm).filter(([,a])=>altOk(a)).length,ev=str(tm&&tm.evid);
      return h("tr",{key:n},h("td",{className:"c"},loc(n)),h("td",{className:"c "+(okc>=3?"ok":okc?"wa":"")},okc),h("td",null,e?h("div",null,h("b",null,e.n),h("div",{className:"sm mut"},str(e.tipo))):"—"),h("td",null,e?str(e.contacto):"—"),
       h("td",null,/^https?:\/\//.test(ev)?h("a",{href:ev,target:"_blank",rel:"noopener"},"Abrir"):"—"),
-      h("td",{className:"c "+(perfilOk(tm)?"ok":perfilCuenta(tm)?"wa":""),title:"Misión, visión, valores, estructura, políticas y normas"},perfilOk(tm)?"✓":perfilCuenta(tm)+"/"+PERFIL.length),
+      h("td",{className:"c "+(perfilOk(tm)?"ok":perfilCuenta(tm)?"wa":""),title:"Misión, visión, valores, filosofía, estructura y organigrama, políticas y normas"},perfilOk(tm)?"✓":perfilCuenta(tm)+"/"+PERFIL.length),
       h("td",null,e?(conf===String(n)?h("span",{className:"row"},h("button",{className:"btn sm",onClick:()=>{reopen(n);setConf("");}},"Sí, reabrir"),h("button",{className:"btn alt sm",onClick:()=>setConf("")},"No")):h("button",{className:"btn alt sm",onClick:()=>setConf(String(n))},"Reabrir selección")):null));})))),
    h("p",{className:"sm mut"},"«Reabrir selección» permite al equipo elegir otra organización; sus alternativas se conservan.")),
   h("div",null,h("h2",null,"Calificaciones y nota final ponderada"),
