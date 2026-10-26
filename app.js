@@ -1275,7 +1275,47 @@ function CalendarioDocente(){
   msg?h("p",{className:"sm",role:"status",style:{marginTop:8}},msg):null);
 }
 
-function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen}){
+/* ---------- Docente: ajustar integrantes y roles de los equipos ----------
+   Mueve alumnos entre equipos del mismo grupo, agrega a quien no tiene equipo, quita integrantes y
+   reasigna roles. No borra nada de lo capturado o entregado: el trabajo pertenece al equipo y las
+   firmas anteriores se conservan. Quien sale de un equipo solo deja sus roles en ese equipo. */
+function EquiposDocente({G,teams,wt,addMem}){
+ const B=window.PI_BACKEND,sheets=B.mode==="sheets",TT=[1,2,3,4,5].map(i=>G.off+i),MAX=CFG_EQ.max;
+ const [busy,setBusy]=useState(false),[msg,setMsg]=useState(""),[pend,setPend]=useState(null);
+ const reg=regMap(G,teams),sin=rosterOf(G).map(fullName).filter(n=>!reg[norm(n)]);
+ const nom=t=>"Equipo "+loc(t);
+ /* acción: {tipo:"mover"|"quitar"|"agregar", from, id, n, to} */
+ const aplicar=async a=>{setBusy(true);setMsg("");let r={ok:true};
+  try{
+   if(sheets){r=await B.asignar(a.tipo==="agregar"?{nombre:a.n,eq:a.to}:{id:a.id,eq:a.tipo==="quitar"?0:a.to});}
+   else{if(a.from){wt(a.from,["mem",a.id,"del"],true);ROLES.forEach(x=>{const tm=teams[a.from];if(tm&&tm.roles&&tm.roles[x.k]===a.id)wt(a.from,["roles",x.k],"");});}
+    if(a.to)await addMem(a.to,[a.n]);}
+  }catch(e){r={ok:false,msg:"No se pudo guardar. Revisa tu conexión."};}
+  setBusy(false);setPend(null);
+  setMsg(r&&r.ok?"✓ "+a.n+(a.tipo==="quitar"?" quedó sin equipo.":a.tipo==="agregar"?" se agregó al "+nom(a.to)+".":" se movió al "+nom(a.to)+".")+" Lo capturado y entregado se conserva.":"⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
+ const pide=(a,txt)=>setPend({a,txt});
+ return h("div",{className:"card"},h("h2",null,"👥 Integrantes y roles · "+G.n),
+  h("p",{className:"sm mut"},"Mueve alumnos entre equipos, agrega a quien no tiene equipo, quita integrantes o cambia roles. ",h("b",null,"No se borra nada de lo capturado ni entregado"),": el trabajo es del equipo y las firmas anteriores se conservan. Quien sale de un equipo solo deja sus roles ahí. Máximo "+MAX+" integrantes por equipo."),
+  pend?h("div",{className:"row",role:"alert",style:{background:"var(--soft)",padding:"8px 12px",borderRadius:8,margin:"8px 0"}},h("span",null,pend.txt),
+   h("button",{className:"btn sm",disabled:busy,onClick:()=>aplicar(pend.a)},busy?"Guardando…":"Sí, aplicar"),h("button",{className:"btn alt sm",disabled:busy,onClick:()=>setPend(null)},"Cancelar")):null,
+  msg?h("p",{className:"sm",role:"status",style:{fontWeight:600}},msg):null,
+  h("div",{style:{display:"grid",gap:12,gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",marginTop:8}},TT.map(t=>{const tm=teams[t]||{},ms=members(tm),lleno=ms.length>=MAX,sinRol=ms.filter(([id])=>!rolesOf(tm,id).length).map(([,x])=>x.n);
+   return h("div",{key:t,style:{border:"1px solid var(--line)",borderRadius:10,padding:10}},
+    h("div",{className:"bar"},h("b",null,nom(t)+((empOfTeam(tm)||{}).n?" · "+empOfTeam(tm).n:"")),h("span",{className:"pill "+(ms.length>=CFG_EQ.min&&ms.length<=MAX?"ok":"wa")},ms.length+"/"+MAX)),
+    ms.length?h("ul",{style:{listStyle:"none",padding:0,margin:"6px 0",display:"grid",gap:6}},ms.map(([id,x])=>h("li",{key:id,style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
+     h("span",{style:{flex:"1 1 140px"}},x.n,h("br"),h("small",{className:"mut"},rolesOf(tm,id).join(", ")||"Sin rol")),
+     h("select",{"aria-label":"Mover a "+x.n,value:"",disabled:busy,style:{maxWidth:150},onChange:e=>{const v=e.target.value;if(!v)return;
+       if(v==="0")pide({tipo:"quitar",from:t,id,n:x.n},"¿Quitar a "+x.n+" del "+nom(t)+"? Quedará sin equipo.");
+       else{const to=+v;pide({tipo:"mover",from:t,id,n:x.n,to},"¿Mover a "+x.n+" del "+nom(t)+" al "+nom(to)+"?");}}},
+      h("option",{value:""},"Mover a…"),TT.filter(o=>o!==t).map(o=>h("option",{key:o,value:o,disabled:members(teams[o]).length>=MAX},nom(o)+(members(teams[o]).length>=MAX?" (lleno)":""))),h("option",{value:"0"},"Quitar (sin equipo)"))))):h("p",{className:"sm mut"},"Sin integrantes."),
+    ms.length?h("details",null,h("summary",{className:"sm"},"Roles directivos"+(sinRol.length?" · falta rol: "+sinRol.length:"")),
+     h("div",{style:{display:"grid",gap:4,marginTop:6}},ROLES.map(r=>{const v=tm.roles&&tm.roles[r.k]||"";return h("label",{key:r.k,className:"sm",style:{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}},h("span",null,r.a),
+      h("select",{"aria-label":r.n+" · "+nom(t),value:ms.some(([id])=>id===v)?v:"",disabled:busy,style:{maxWidth:190},onChange:e=>wt(t,["roles",r.k],e.target.value)},h("option",{value:""},"Sin asignar"),ms.map(([id,x])=>h("option",{key:id,value:id},x.n))));}))):null,
+    sin.length&&!lleno?h("select",{"aria-label":"Agregar al "+nom(t),value:"",disabled:busy,style:{marginTop:6},onChange:e=>{const n=e.target.value;if(n)pide({tipo:"agregar",n,to:t},"¿Agregar a "+n+" al "+nom(t)+"?");}},
+     h("option",{value:""},"+ Agregar alumno sin equipo…"),sin.map(n=>h("option",{key:n,value:n},n))):null);})));
+}
+
+function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen,wt,addMem}){
  const [conf,setConf]=useState("");
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L");
  const G=GRUPOS.find(x=>x.k===pg)||GRUPOS[0],TT=[1,2,3,4,5].map(i=>G.off+i),reg=regMap(G,teams),sin=rosterOf(G).map(fullName).filter(n=>!reg[norm(n)]);
@@ -1313,6 +1353,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
      h("td",{style:{minWidth:90}},h("input",{type:"number",min:0,max:100,"aria-label":"Pitch equipo "+loc(n),value:str(gr.pitch),onChange:e=>wg2(n,["pitch"],e.target.value)})),
      h("td",{className:"c"},p.toFixed(1)),h("td",{className:"c "+(q>=90?"ok":q>=70?"wa":p?"ko":"")},q.toFixed(1)));})))),
    h("p",{className:"sm mut"},"La calificación de cada entrega se captura con la rúbrica dentro de la semana del equipo (botón «Abrir»). Los pesos suman 80% con el pitch; «Sobre 100» reescala el avance.")),
+  h(EquiposDocente,{G,teams,wt,addMem}),
   h(EvalRoles,{G,teams,allW,grades}),
   h("div",{className:"card"},h("h2",null,"Sin equipo · "+G.n+" ("+sin.length+")"),sin.length?h("div",{className:"chips"},sin.map(n=>h("span",{key:n},n))):h("p",{className:"mut"},"Todos los alumnos ya tienen equipo.")),
   window.PI_BACKEND.mode==="artifact"?null:h(Compartir),
@@ -1499,7 +1540,7 @@ function App(){
  else if(view==="opciones")body=h(Opciones,{sorteo,teams,team,isAdmin});
  else if(view==="sorteo")body=h(Sorteo,{teams,sorteo,isAdmin,me,team,drawAB,releaseDraw,reassign,request,attend,wC:(t,f,v,d)=>write("teams/"+t,["alts","C",f],v,d)});
  else if(view==="inicio"||(!inTeam&&!/^(docente|reportes|sorteo|opciones|instr)$/.test(view)))body=h(Start,{teams,go,isAdmin,eqSes,meSes,nav});
- else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
+ else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),wt:(n,p,v)=>write("teams/"+n,p,v,0),addMem,openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
  else if(view==="reportes"&&isAdmin)body=h(Reportes,{teams,allW,grades});
  else if(view==="equipo")body=h(Equipo,{t:team,tm,me,teams,isAdmin,myName,sorteo,drawAB,reassign,tomadas,wdocs,addMem,libresSrv:(pub.libres&&pub.libres.n)||[],setView:nav,wm:(p,v,d)=>write("teams/"+team,p,v,d)});
  else if(view==="entregas")body=h(Entregas,{t:team,tm,wdocs,me,isAdmin,setView,wl:(i,p,v)=>write("teams/"+team+"/w/"+i,p,v)});

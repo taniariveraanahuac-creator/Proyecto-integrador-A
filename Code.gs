@@ -419,7 +419,7 @@ function asignar_(yo, id, nombre, eq) {
       if ((conteos_(a.g)[eq] || 0) >= MAX_EQUIPO) return { ok: false, msg: "Ese equipo ya tiene " + MAX_EQUIPO + " integrantes." };
     }
     SpreadsheetApp.getActive().getSheetByName(HOJA_ALUMNOS).getRange(a.fila, C_EQ).setValue(eq || "");
-    if (!eq && a.eq) {   // quien sale del equipo deja sus roles
+    if (a.eq && a.eq !== (eq || 0)) {   // quien sale de su equipo (o se mueve a otro) deja sus roles ahí; lo ya capturado se conserva
       var t = leerTodo_(), p = "teams/" + a.eq, d = t.filas[p] ? parse_(t.filas[p].json) : null;
       if (d && d.roles) { var cambio = false; Object.keys(d.roles).forEach(function (k) { if (d.roles[k] === a.id) { d.roles[k] = ""; cambio = true; } }); if (cambio) { var c = {}; c[p] = d; guardar_(t, c); } }
     }
