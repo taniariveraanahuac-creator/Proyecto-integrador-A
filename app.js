@@ -938,13 +938,47 @@ function FormatoCard(){
   h("p",{className:"sm"},h("b",null,"Rúbrica igual para todas las entregas: "),RUB.map(r=>r[1]+" ("+r[2]+")").join(" · ")+"."));
 }
 /* ---------- Entregas: apartado único ---------- */
-function Entregas({t,tm,wdocs,me,isAdmin,setView,wl}){
+/* ---------- Calificación individual de la semana ----------
+   Docente: ve y ajusta a cada integrante (calificación directa opcional y comentario).
+   Alumno: ve solo su propia calificación y la del equipo. */
+function CalifIndividual({wi,tm,wd,gr,wg,isAdmin,me}){
+ const ms=members(tm).filter(([id])=>isAdmin||id===me),b=califBase(gr,wi),fe=califEq(gr,wi,wd||{}),pen=semRetraso(wi,wd||{},gr);
+ if(!ms.length)return null;
+ return h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"👤 Calificación "+(isAdmin?"individual":"de la semana")),h("span",{className:"pill "+(fe==null?"":fe>=8?"ok":fe>=6?"wa":"ko")},"Equipo: "+(fe==null?"sin calificar":fe.toFixed(1)+" / 10"))),
+  h("p",{className:"sm mut"},isAdmin?"Calificación individual = "+Math.round(PESO_EQUIPO*100)+"% rúbrica del equipo + "+Math.round(PESO_ROL*100)+"% evaluación de su rol, menos "+PENAL+" punto por semana de retraso. Si escribes una «calificación directa», sustituye esa combinación (el retraso se sigue descontando). Puedes calificar también avances aunque la semana no esté entregada.":"Tu calificación combina la del equipo ("+Math.round(PESO_EQUIPO*100)+"%) y la evaluación de tu rol ("+Math.round(PESO_ROL*100)+"%), menos "+PENAL+" punto por cada semana de retraso."),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Alumno"),h("th",null,"Rol"),h("th",null,"Equipo"),h("th",null,"Aporte del rol"),isAdmin?h("th",null,"Calificación directa"):null,h("th",null,"Retraso"),h("th",null,"Calificación"),h("th",null,"Comentario"))),
+   h("tbody",null,ms.map(([id,x])=>{const rk=ROLES.filter(r=>tm.roles&&tm.roles[r.k]===id),rp=rk.map(r=>rolPts(gr,wi,r.k)).filter(v=>v!=null),ci=califInd(tm,gr,wi,wd||{},id),io=str(gr&&gr.io&&gr.io[wi]&&gr.io[wi][id]),ic=str(gr&&gr.ic&&gr.ic[wi]&&gr.ic[wi][id]);
+    return h("tr",{key:id},h("td",null,x.n+(id===me?" (tú)":"")),h("td",{className:"sm"},rk.map(r=>r.a).join(", ")||"Sin rol"),h("td",{className:"c"},b==null?"·":r1(b).toFixed(1)),
+     h("td",{className:"c"},rp.length?r1(rp.reduce((a,v)=>a+v,0)/rp.length).toFixed(1):"·"),
+     isAdmin?h("td",{style:{minWidth:90}},h("input",{type:"number",min:0,max:10,step:.1,"aria-label":"Calificación directa de "+x.n,value:io,placeholder:"—",style:{width:80},onChange:e=>wg(["io",String(wi),id],e.target.value)})):null,
+     h("td",{className:"c sm "+(pen?"ko":"")},pen?"−"+pen*PENAL:"0"),
+     h("td",{className:"c "+(ci==null?"":ci.v>=8?"ok":ci.v>=6?"wa":"ko")},h("b",null,ci==null?"·":ci.v.toFixed(1)),ci&&ci.parcial?"*":"",ci&&ci.directa?h("div",{className:"sm mut"},"directa"):null),
+     h("td",{style:{minWidth:200}},isAdmin?h("textarea",{"aria-label":"Comentario individual para "+x.n,value:ic,rows:2,placeholder:"Comentario para este alumno",onChange:e=>wg(["ic",String(wi),id],e.target.value)}):h("span",{className:"sm",style:{whiteSpace:"pre-wrap"}},ic||"—")));})))),
+  h("p",{className:"sm mut"},"* = aún no se evalúa el aporte del rol; se usa la calificación del equipo."));
+}
+/* ---------- Tabla de calificaciones S1 a S8: equipo e individuales ---------- */
+function TablaCalif({tm,wdocs,gr,isAdmin,me,setView}){
+ const ms=members(tm).filter(([id])=>isAdmin||id===me),eq=W.map((w,i)=>califEq(gr,i,wdocs[i]||{})),pEq=promPond(eq);
+ const cel=(v,i,extra)=>h("td",{key:i,className:"c "+(v==null?"":v>=8?"ok":v>=6?"wa":"ko"),style:setView?{cursor:"pointer"}:null,title:"Abrir S"+(i+1),onClick:setView?()=>{setView("s"+i);window.scrollTo(0,0);}:undefined},v==null?"·":v.toFixed(1)+(extra||""));
+ return h("div",{className:"card"},h("h2",null,"📊 Calificaciones"+(isAdmin?" del equipo y por alumno":"")),
+  h("p",{className:"sm mut"},"Sobre 10, ya con la penalización de "+PENAL+" punto por semana de retraso. Promedio ponderado con el valor de cada semana (solo semanas calificadas)."+(isAdmin?"":" Ves la calificación del equipo y la tuya.")),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,""),W.map((w,i)=>h("th",{key:i},"S"+(i+1),h("br"),h("small",null,Math.round(w.v*100)+"%"))),h("th",{className:"g"},"Promedio"))),
+   h("tbody",null,
+    h("tr",null,h("td",null,h("b",null,"Equipo")),eq.map((v,i)=>cel(v,i)),h("td",{className:"c"},h("b",null,pEq==null?"—":pEq.toFixed(1)))),
+    ms.map(([id,x])=>{const v=W.map((w,i)=>califInd(tm,gr,i,wdocs[i]||{},id)),p=promPond(v.map(c=>c&&c.v));
+     return h("tr",{key:id},h("td",null,x.n+(id===me&&!isAdmin?" (tú)":""),h("div",{className:"sm mut"},rolesAOf(tm,id).join(", ")||"Sin rol")),v.map((c,i)=>cel(c&&c.v,i,c&&c.parcial?"*":"")),h("td",{className:"c"},h("b",null,p==null?"—":p.toFixed(1))));})))),
+  !isAdmin&&!me?h("p",{className:"sm mut"},"Elige quién eres al entrar para ver tu calificación individual."):null,
+  h("p",{className:"sm mut"},"* = falta evaluar el aporte del rol."+(setView?" Toca una calificación para abrir esa semana.":"")));
+}
+
+function Entregas({t,tm,wdocs,me,isAdmin,setView,wl,gr}){
  const lead=leaderOf(tm)===me,canEdit=!!me||isAdmin;
  let ent=0;W.forEach((w,i)=>{const s=estado(wdocs[i]||{},i);if(s.k==="ok"||s.k==="tarde")ent++;});
  return h("div",{className:"stack"},
   h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"📤 Entregas del equipo"),
    h("p",null,"Todas las entregas en un solo lugar. Para cada semana: 1) capturen las 5 secciones en su pestaña (S1 a S8); 2) si tienen anexos, súbanlos a Drive, OneDrive o Canva con acceso «cualquier persona con el enlace» y peguen la liga aquí; 3) el Director General marca la entrega cuando la lista de verificación esté completa; 4) cada integrante descarga el PDF de la semana y lo sube a Brightspace."),
    h("div",{className:"kpi",style:{marginTop:8}},h("div",null,h("b",null,ent+" / 8"),"Entregas marcadas"),h("div",null,h("b",null,empOfTeam(tm)?empOfTeam(tm).n:"—"),"Organización"))),
+  h(TablaCalif,{tm,wdocs,gr:gr||{},isAdmin,me,setView}),
   h(FormatoCard),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Fecha límite"),h("th",null,"Estado"),h("th",null,"Liga a anexos"),h("th",null,""))),
    h("tbody",null,W.map((w,i)=>{const wd=wdocs[i]||{},st=estado(wd,i),lk=str(wd.link),okL=/^https?:\/\/\S+\.\S+/.test(lk.trim());
@@ -1002,6 +1036,7 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    link&&!linkOk?h("p",{className:"sm",style:{color:"var(--kot)"}},"La liga debe empezar con https://"):linkOk?h("p",{className:"sm"},h("a",{href:link.trim(),target:"_blank",rel:"noopener"},"Abrir anexos")):null),
   w.fin?h(EntregableFinal,{wd,ww,canEdit,setView}):null,
   h(AportesRol,{t,wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}),
+  h(CalifIndividual,{wi,tm,wd,gr,wg,isAdmin,me}),
   h("div",{className:"card",style:{borderColor:"var(--or)"}},h("h2",null,"📤 Entregar la semana "+(wi+1)),
    h("ul",{style:{listStyle:"none",paddingLeft:0,margin:"6px 0"}},ck.map(([l,ok],i)=>h("li",{key:i,style:{color:ok?"var(--okt)":"var(--mut)",fontWeight:600}},(ok?"✓ ":"○ ")+l))),
    wd&&wd.est==="Entregado"?h("div",null,h("p",{className:"pill "+st.c,style:{whiteSpace:"normal"}},"✅ Entregado el "+fmt(wd.at)+(wd.by?" por "+wd.by:"")),
@@ -1351,10 +1386,12 @@ const califEq=(gr,wi,wd)=>{const b=califBase(gr,wi);return b==null?null:Math.max
 /* Evaluación del aporte de un rol (0 a 10): número capturado o, si solo se marcó el nivel, su equivalente. */
 const rolPts=(gr,wi,k)=>{const v=parseFloat(gr&&gr.rp&&gr.rp[wi]&&gr.rp[wi][k]);if(!isNaN(v))return v;const l=gr&&gr.rl&&gr.rl[wi]&&gr.rl[wi][k];return typeof l==="number"&&NIV[l]?NIV[l][1]*10:null;};
 /* Calificación individual (0 a 10) de un integrante en la semana. */
-function califInd(tm,gr,wi,wd,id){const b=califBase(gr,wi);if(b==null)return null;
+/* Calificación individual directa que pone la docente (0 a 10): sustituye la combinación equipo + rol. */
+const indDirecta=(gr,wi,id)=>{const v=parseFloat(gr&&gr.io&&gr.io[wi]&&gr.io[wi][id]);return isNaN(v)?null:v;};
+function califInd(tm,gr,wi,wd,id){const b=califBase(gr,wi),dir=indDirecta(gr,wi,id);if(b==null&&dir==null)return null;
  const ks=ROLES.filter(r=>tm&&tm.roles&&tm.roles[r.k]===id).map(r=>r.k),rs=ks.map(k=>rolPts(gr,wi,k)).filter(x=>x!=null);
- const base=rs.length?PESO_EQUIPO*b+PESO_ROL*(rs.reduce((s,x)=>s+x,0)/rs.length):b;
- return {v:Math.max(0,r1(base-PENAL*semRetraso(wi,wd,gr))),parcial:!rs.length};}
+ const base=dir!=null?dir:rs.length?PESO_EQUIPO*b+PESO_ROL*(rs.reduce((s,x)=>s+x,0)/rs.length):b;
+ return {v:Math.max(0,r1(base-PENAL*semRetraso(wi,wd,gr))),parcial:dir==null&&!rs.length,directa:dir!=null};}
 /* Promedio ponderado (0 a 10) con los pesos de cada semana, solo de las semanas ya calificadas. */
 const promPond=vals=>{let s=0,p=0;vals.forEach((v,i)=>{if(v!=null){s+=v*W[i].v;p+=W[i].v;}});return p?r1(s/p):null;};
 const txtPen=(wi,wd,gr)=>{const n=semRetraso(wi,wd,gr);return n?"−"+(n*PENAL)+" ("+n+" semana"+(n>1?"s":"")+" de retraso)":"";};
@@ -1378,7 +1415,7 @@ function RepAlumnos({G,teams,allW,grades}){
   F.map(f=>{const tm=teams[f.t]||{},gr=grades[f.t]||{},wd=allW[f.t]||{},ks=ROLES.filter(r=>tm.roles&&tm.roles[r.k]===f.id);
    return h("div",{key:f.t+f.id,className:"sec",style:{marginTop:14}},h("h4",{style:{margin:"0 0 4px"}},f.n+" · Equipo "+loc(f.t)+" · "+f.roles+" · Promedio: "+(f.prom==null?"—":f.prom.toFixed(1))),
     h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Equipo (rúbrica)"),h("th",null,"Aporte del rol"),h("th",null,"Retraso"),h("th",null,"Calificación"),h("th",null,"Comentario del aporte"))),
-     h("tbody",null,W.map((w,i)=>{const b=califBase(gr,i),rp=ks.map(r=>rolPts(gr,i,r.k)).filter(x=>x!=null),s=f.sem[i],cm=ks.map(r=>str(gr.rc&&gr.rc[i]&&gr.rc[i][r.k])).filter(Boolean).join(" · ");
+     h("tbody",null,W.map((w,i)=>{const b=califBase(gr,i),rp=ks.map(r=>rolPts(gr,i,r.k)).filter(x=>x!=null),s=f.sem[i],cm=ks.map(r=>str(gr.rc&&gr.rc[i]&&gr.rc[i][r.k])).concat([str(gr.ic&&gr.ic[i]&&gr.ic[i][f.id])]).filter(Boolean).join(" · ");
       return h("tr",{key:i},h("td",{className:"c"},"S"+(i+1)),h("td",{className:"c"},b==null?"·":r1(b).toFixed(1)),h("td",{className:"c"},rp.length?r1(rp.reduce((a,x)=>a+x,0)/rp.length).toFixed(1):"·"),
        h("td",{className:"c sm"},txtPen(i,wd[i]||{},gr)||"—"),h("td",{className:"c"},h("b",null,s==null?"·":s.v.toFixed(1)+(s.parcial?"*":""))),h("td",{className:"sm"},cm||"—"));})))));}));
 }
@@ -1591,6 +1628,16 @@ function RevisionDocente({teams,grades,openTeam,wg2}){
   msg?h("p",{className:"sm",role:"status",style:{marginTop:6}},msg):null);
 }
 
+function CalifAlumnosDocente({G,teams,allW,grades,openTeam}){
+ const F=filasAlumnos(G,teams,allW,grades);
+ return h("div",{className:"card"},h("h2",null,"👤 Calificaciones por alumno · "+G.n),
+  h("p",{className:"sm mut"},"Sobre 10, con la penalización por retraso. Se califica dentro de cada semana del equipo («Abrir»): rúbrica del equipo, aporte de cada rol y, si quieres, una calificación individual directa. * = falta evaluar el aporte del rol."),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Alumno"),h("th",null,"Equipo"),W.map((w,i)=>h("th",{key:i},"S"+(i+1))),h("th",{className:"g"},"Promedio"),h("th",null,""))),
+   h("tbody",null,F.length?F.map(f=>h("tr",{key:f.t+f.id},h("td",null,f.n,h("div",{className:"sm mut"},f.roles)),h("td",{className:"c"},loc(f.t)),
+    f.sem.map((c,i)=>h("td",{key:i,className:"c "+(c==null?"":c.v>=8?"ok":c.v>=6?"wa":"ko")},c==null?"·":c.v.toFixed(1)+(c.parcial?"*":""))),
+    h("td",{className:"c"},h("b",null,f.prom==null?"—":f.prom.toFixed(1))),h("td",null,h("button",{className:"btn alt sm",onClick:()=>openTeam(f.t)},"Abrir")))):h("tr",null,h("td",{colSpan:12},"Aún no hay alumnos en equipos."))))));
+}
+
 function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen,wt,addMem}){
  const [conf,setConf]=useState("");
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L");
@@ -1631,6 +1678,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
      h("td",{style:{minWidth:90}},h("input",{type:"number",min:0,max:100,"aria-label":"Pitch equipo "+loc(n),value:str(gr.pitch),onChange:e=>wg2(n,["pitch"],e.target.value)})),
      h("td",{className:"c"},p.toFixed(1)),h("td",{className:"c "+(q>=90?"ok":q>=70?"wa":p?"ko":"")},q.toFixed(1)));})))),
    h("p",{className:"sm mut"},"La calificación de cada entrega se captura con la rúbrica dentro de la semana del equipo (botón «Abrir»). Los pesos suman 80% con el pitch; «Sobre 100» reescala el avance.")),
+  h(CalifAlumnosDocente,{G,teams,allW,grades,openTeam}),
   h(EquiposDocente,{G,teams,wt,addMem}),
   h(EvalRoles,{G,teams,allW,grades}),
   h("div",{className:"card"},h("h2",null,"Sin equipo · "+G.n+" ("+sin.length+")"),sin.length?h("div",{className:"chips"},sin.map(n=>h("span",{key:n},n))):h("p",{className:"mut"},"Todos los alumnos ya tienen equipo.")),
@@ -1821,7 +1869,7 @@ function App(){
  else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),wt:(n,p,v)=>write("teams/"+n,p,v,0),addMem,openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
  else if(view==="reportes"&&isAdmin)body=h(Reportes,{teams,allW,grades});
  else if(view==="equipo")body=h(Equipo,{t:team,tm,me,teams,isAdmin,myName,sorteo,drawAB,reassign,tomadas,wdocs,addMem,libresSrv:(pub.libres&&pub.libres.n)||[],setView:nav,wm:(p,v,d)=>write("teams/"+team,p,v,d)});
- else if(view==="entregas")body=h(Entregas,{t:team,tm,wdocs,me,isAdmin,setView,wl:(i,p,v)=>write("teams/"+team+"/w/"+i,p,v)});
+ else if(view==="entregas")body=h(Entregas,{t:team,tm,wdocs,me,isAdmin,setView,gr:grades[team]||{},wl:(i,p,v)=>write("teams/"+team+"/w/"+i,p,v)});
  else if(view==="reporte")body=h(Reporte,{t:team,tm,wdocs,myName});
  else if(/^s\d$/.test(view)){const wi=+view.slice(1);body=h(Semana,{key:wi,wi,t:team,tm,wd:wdocs[wi]||{},me,myName,isAdmin,setView:nav,gr:grades[team]||{},ww:(p,v,d)=>write("teams/"+team+"/w/"+wi,p,v,d),wg:(p,v)=>write("grades/"+team,p,v)});}
  else body=h(Start,{teams,go,isAdmin,eqSes,meSes,nav});
