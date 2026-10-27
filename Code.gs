@@ -302,7 +302,7 @@ function escribir_(yo, ops) {
         // Pasada la fecha límite de la semana queda VENCIDA: se acepta, pero el servidor deja evidencia
         // (_venc = primera edición tardía) y sella la hora real de entrega para calcular el retraso.
         var mw = /^teams\/\d+\/w\/(\d+)$/.exec(p);
-        if (mw) { var wi_ = Number(mw[1]); if (!plazoAbierto_(wi_, actual)) { negadas.push(p); return; } dat = JSON.parse(JSON.stringify(dat)); delete dat.ext; delete dat._venc; delete dat._vencBy; dat._at = Date.now(); dat._by = firma_(t, cambios, yo);
+        if (mw) { var wi_ = Number(mw[1]); if (!plazoAbierto_(wi_, actual)) { negadas.push(p); return; } dat = JSON.parse(JSON.stringify(dat)); delete dat.ext; delete dat._venc; delete dat._vencBy; delete dat.hist; delete dat.at1; dat._at = Date.now(); dat._by = firma_(t, cambios, yo);
           if (dat.hasOwnProperty("at")) dat.at = Date.now();
           if (dat.est === "Entregado") { dat.at = Date.now(); dat.by = dat._by; }
           if (Date.now() > venceMs_(wi_, actual) && !(actual && actual._venc)) { dat._venc = Date.now(); dat._vencBy = dat._by; }
@@ -312,6 +312,18 @@ function escribir_(yo, ops) {
         // Organización: no puede repetirse entre equipos.
         if (/^teams\/\d+$/.test(p) && esObj_(dat.org) && dat.org.n && orgOcupada_(t, cambios, p, dat.org.n)) { delete dat.org.n; negadas.push(p + "#org"); }
         if (/^teams\/\d+$/.test(p) && esObj_(dat.alts) && esObj_(dat.alts.C) && dat.alts.C.n && orgOcupada_(t, cambios, p, dat.alts.C.n)) { delete dat.alts.C.n; negadas.push(p + "#org"); }
+      }
+      // Registro de entregas (lo sella el servidor): cada «Entregado» y cada «Reabierta» queda con fecha,
+      // quién, la fecha límite vigente en ese momento y las semanas de atraso. La primera entrega se guarda en at1.
+      var mh = /^teams\/\d+\/w\/(\d+)$/.exec(p);
+      if (mh && op.t !== "delete" && (dat.est === "Entregado" || dat.est === "Pendiente") && !(actual && actual.est === dat.est)) {
+        var wh = Number(mh[1]), L_ = limites_(), ahoraH = Date.now(), lim_ = L_[wh] ? new Date(L_[wh] + "T23:59:59-05:00").getTime() : 0;
+        var quienH = yo.rol === "docente" ? "Docente" : (dat._by || (yo.a && yo.a.n) || "");
+        var atH = dat.est === "Entregado" ? (Number(dat.at) || ahoraH) : ahoraH;
+        dat = JSON.parse(JSON.stringify(dat)); dat.hist = {};
+        dat.hist["h" + ahoraH.toString(36) + Math.random().toString(36).slice(2, 6)] = { tipo: dat.est === "Entregado" ? "entregada" : "reabierta", at: atH, by: quienH, limite: L_[wh] || "", ext: (actual && actual.ext) || "",
+          semanas: dat.est === "Entregado" && lim_ && atH > lim_ ? Math.ceil((atH - lim_) / (7 * 864e5)) : 0 };
+        if (dat.est === "Entregado" && !(actual && actual.at1)) dat.at1 = atH;
       }
       if (op.t === "delete") d = null;
       else if (op.t === "set") d = dat;
@@ -691,13 +703,25 @@ function limites_() {
 /* Docente: guarda el calendario (8 fechas AAAA-MM-DD en orden) o, con fechas vacías, restaura LIMITES.
    Solo cambia las fechas límite: no toca ningún documento, entrega, calificación ni prórroga. */
 function guardarCalendario_(fechas) {
-  var P = PropertiesService.getScriptProperties();
+  var P = PropertiesService.getScriptProperties(), antesCal = limites_().slice();
   if (fechas == null || fechas === "" || (Array.isArray(fechas) && !fechas.length)) P.deleteProperty("CALENDARIO");
   else if (!fechasValidas_(fechas)) return { ok: false, msg: "Fechas no válidas: deben ser 8, con formato AAAA-MM-DD y en orden (S1 ≤ S2 ≤ … ≤ S8)." };
   else P.setProperty("CALENDARIO", JSON.stringify(fechas));
+  registrarFechas_(antesCal, limites_(), "Calendario (todos los equipos)");
   subirRev_();   // avisa a todas las páginas abiertas
   try { generarResumen(); } catch (x) {}
   return { ok: true, limites: limitesApi_() };
+}
+/* Hoja «historial de fechas»: cada cambio de fecha límite queda registrado (qué semana, de qué fecha a cuál y cuándo). */
+function registrarFechas_(antes, despues, que) {
+  try {
+    var regs = [], ahora = new Date();
+    despues.forEach(function (d, i) { if ((antes[i] || "") !== (d || "")) regs.push([ahora, que, que === "Cierre general" ? "Cierre" : "S" + (i + 1), antes[i] || "(fecha de la S8)", d || "(fecha de la S8)"]); });
+    if (!regs.length) return;
+    var ss = SpreadsheetApp.getActive(), sh = ss.getSheetByName("historial de fechas");
+    if (!sh) { sh = ss.insertSheet("historial de fechas"); sh.getRange(1, 1, 1, 5).setValues([["cambiado el", "qué", "semana", "fecha anterior", "fecha nueva"]]).setFontWeight("bold"); sh.setFrozenRows(1); }
+    sh.getRange(sh.getLastRow() + 1, 1, regs.length, 5).setValues(regs);
+  } catch (e) {}
 }
 /* ---------- Cierre general del proyecto ----------
    Fecha hasta la que los equipos pueden seguir capturando y entregar semanas atrasadas
@@ -715,7 +739,7 @@ function cierreMs_() {
 /* Lo que recibe la página: las 8 fechas límite y, si hay ampliación, la fecha de cierre como 9.º elemento. */
 function limitesApi_() { var L = limites_().slice(), c = cierreGuardado_(); if (c) L.push(c); return L; }
 function guardarCierre_(fecha) {
-  var P = PropertiesService.getScriptProperties();
+  var P = PropertiesService.getScriptProperties(), cierreAntes_ = cierreGuardado_();
   if (fecha == null || fecha === "") P.deleteProperty("CIERRE");
   else {
     fecha = String(fecha);
@@ -725,6 +749,7 @@ function guardarCierre_(fecha) {
     if (fecha > max) return { ok: false, msg: "El cierre general puede ampliarse como máximo " + MAX_ANIOS_CIERRE + " años (hasta " + max + ")." };
     P.setProperty("CIERRE", fecha);
   }
+  registrarFechas_([cierreAntes_], [cierreGuardado_()], "Cierre general");
   subirRev_();   // avisa a todas las páginas abiertas
   try { generarResumen(); } catch (x) {}
   return { ok: true, limites: limitesApi_() };

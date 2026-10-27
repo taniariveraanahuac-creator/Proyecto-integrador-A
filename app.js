@@ -1061,6 +1061,8 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
      :h("button",{className:"btn",style:{marginTop:8},disabled:!ready,onClick:()=>setConf(true)},ready?"Marcar como entregada":"Completen la lista para entregar"))
     :h("p",{className:"sm mut"},"El Director General marca la entrega cuando la lista esté completa."),
    h("p",{className:"sm"},"Después, ",h("b",null,"cada integrante descarga el PDF")," de abajo y lo sube a Brightspace."),
+   h(RegistroEntrega,{wi,wd,gr}),
+   isAdmin?h(FechaSemanaDocente,{wi}):null,
    isAdmin?h("div",{className:"ex",style:{marginTop:10}},h("b",{className:"sm"},"Prórroga para este equipo"),
     h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},h("div",null,h("label",{className:"l sm",htmlFor:"ext"+wi,style:{marginTop:0}},"Nueva fecha límite (23:59)"),h("input",{id:"ext"+wi,type:"date",value:ext,min:W[wi].d,max:maxISO(),onChange:e=>setExt(e.target.value)})),
      h("button",{className:"btn sm",disabled:!ext||ext===str(wd&&wd.ext)||ext<W[wi].d||ext>maxISO(),onClick:()=>ww(["ext"],ext,0)},"Guardar prórroga"),
@@ -1540,6 +1542,47 @@ function Compartir(){
 }
 
 /* ---------- Panel docente ---------- */
+/* ---------- Registro de la entrega de una semana ----------
+   Muestra cuándo se indicó entregar (fecha original y fecha vigente), cuándo entregó el equipo,
+   el historial de entregas y reaperturas (sellado por el servidor) y la penalización:
+   1 punto (sobre 10) por cada semana o fracción de atraso respecto a la fecha límite vigente. */
+function RegistroEntrega({wi,wd,gr}){
+ const orig=CALENDARIO[wi],vig=W[wi].d,ext=str(wd&&wd.ext),n=semRetraso(wi,wd||{},gr),n0=semRetraso(wi,wd||{}),cond=n0>0&&n===0;
+ const hist=Object.values((wd&&wd.hist)||{}).filter(x=>x&&x.at).sort((a,b)=>a.at-b.at);
+ const ent=!!(wd&&wd.est==="Entregado"),at1=(wd&&wd.at1)||(hist.find(x=>x.tipo==="entregada")||{}).at||(ent?wd.at:0);
+ const fila=(l,v,c)=>h("tr",null,h("td",{className:"sm mut",style:{paddingRight:12}},l),h("td",{className:"sm"+(c?" "+c:"")},v));
+ return h("div",{className:"ex",style:{marginTop:12}},h("b",{className:"sm"},"📋 Registro de la entrega"),
+  h("table",{style:{marginTop:6}},h("tbody",null,
+   fila("Fecha indicada originalmente",fdl(orig)+", 23:59"),
+   vig!==orig?fila("Fecha límite vigente (modificada por la docente)",h("b",null,fdl(vig)+", 23:59")):fila("Fecha límite vigente",h("b",null,fdl(vig)+", 23:59")),
+   ext?fila("Prórroga para este equipo","Puede entregar hasta el "+fdl(ext)+" (el atraso se cuenta desde la fecha vigente)"):null,
+   fila("Primera entrega",at1?fmt(at1):"—"),
+   ent?fila("Entrega vigente",fmt(wd.at)+(wd.by?" · "+wd.by:"")):fila("Estado",wd&&wd.at?"Reabierta para corregir (aún no se vuelve a entregar)":"Sin entregar"),
+   fila("Semanas de atraso",n0?n0+" semana"+(n0>1?"s":""):"0 (a tiempo)",n0?"kot":""),
+   fila("Penalización",cond?"Condonada por la docente":n?h("b",{style:{color:"var(--kot)"}},"−"+(n*PENAL)+" punto"+(n*PENAL>1?"s":"")+" sobre 10"):"Sin penalización"))),
+  hist.length?h("details",{style:{marginTop:6}},h("summary",{className:"sm"},"Historial de entregas ("+hist.length+")"),
+   h("ul",{className:"sm",style:{margin:"6px 0",paddingLeft:"1.2em"}},hist.map((x,i)=>h("li",{key:i},
+    (x.tipo==="entregada"?"📤 Entregada el ":"↩️ Reabierta el ")+fmt(x.at)+(x.by?" por "+x.by:"")+(x.limite?" · fecha límite en ese momento: "+fdl(x.limite):"")+(x.tipo==="entregada"?(x.semanas?" · "+x.semanas+" semana"+(x.semanas>1?"s":"")+" de atraso":" · a tiempo"):""))))):null,
+  h("p",{className:"sm mut",style:{marginTop:6}},"Se resta "+PENAL+" punto (sobre 10) por cada semana o fracción de atraso respecto a la fecha límite vigente."));
+}
+/* Docente: cambia la fecha límite de esta semana para todos los equipos (queda en el «historial de fechas» de la Hoja). */
+function FechaSemanaDocente({wi}){
+ const B=window.PI_BACKEND,[v,setV]=useState(W[wi].d),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false);
+ useEffect(()=>{setV(W[wi].d);setMsg("");},[wi,W[wi].d]);
+ if(!B||!B.calendario)return null;
+ const prev=wi?W[wi-1].d:"",next=wi<W.length-1?W[wi+1].d:"",mx=maxISO();
+ const okF=/^\d{4}-\d{2}-\d{2}$/.test(v)&&(!prev||v>=prev)&&(!next||v<=next)&&v<=mx;
+ const go=async()=>{setBusy(true);setMsg("");const f=W.map((w,i)=>i===wi?v:w.d);const r=await B.calendario(f);setBusy(false);
+  setMsg(r&&r.ok?"✓ La S"+(wi+1)+" ahora vence el "+fdl(v)+" para todos los equipos. El cambio quedó registrado.":"⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
+ return h("div",{className:"ex",style:{marginTop:10}},h("b",{className:"sm"},"📅 Periodo de entrega de la S"+(wi+1)+" · todos los equipos"),
+  h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},
+   h("div",null,h("label",{className:"l sm",htmlFor:"fs"+wi,style:{marginTop:0}},"Fecha límite (23:59)"),h("input",{id:"fs"+wi,type:"date",value:v,min:prev||undefined,max:next||mx,onChange:e=>{setV(e.target.value);setMsg("");}})),
+   h("button",{className:"btn sm",disabled:busy||!okF||v===W[wi].d,onClick:go},busy?"Guardando…":"Cambiar fecha de la S"+(wi+1))),
+  !okF&&v?h("p",{className:"sm",style:{color:"var(--kot)"}},"Debe quedar entre la S"+wi+(prev?" ("+fdl(prev)+")":"")+" y la S"+(wi+2)+(next?" ("+fdl(next)+")":"")+". Para moverla más allá, cambia también las semanas siguientes en «Calendario de entregas»."):null,
+  h("p",{className:"sm mut",style:{marginTop:6}},"Original: "+fdl(CALENDARIO[wi])+". El atraso y la penalización se calculan con la fecha vigente. Si prefieres dar más tiempo sin quitar la penalización, usa la prórroga por equipo o el cierre general."),
+  msg?h("p",{className:"sm",role:"status"},msg):null);
+}
+
 /* ---------- Calendario de entregas (docente) ----------
    Cambia las 8 fechas límite para todos los equipos. No modifica nada de lo capturado o entregado,
    ni las prórrogas por equipo: solo recalcula qué está a tiempo, vencido o tarde. */
