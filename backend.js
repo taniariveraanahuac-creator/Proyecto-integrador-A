@@ -312,6 +312,7 @@
       isDocente = lsg(K.tok) === "local";
       info.roster = CFG.listaLocal || null;
       try { var lc = JSON.parse(lsg("pi-calendario") || "null"); if (Array.isArray(lc)) info.limites = lc; } catch (e) {}
+      try { var lci = lsg("pi-cierre"); if (lci) info.limites = (info.limites || (window.PI_CAL_ORIGINAL || []).slice()).slice(0, 8).concat([lci]); } catch (e) {}
       readyRes();
       return ready.then(function () { return info; });
     }
@@ -357,10 +358,19 @@
     /* Docente: cambia las 8 fechas límite (o con null restaura las originales). No toca lo capturado ni entregado. */
     onCalendario: function (f) { calL.add(f); return function () { calL.delete(f); }; },
     calendario: function (fechas) {
-      if (MODE === "local") { lss("pi-calendario", fechas ? JSON.stringify(fechas) : null); var orig = window.PI_CAL_ORIGINAL || null; setLimites(fechas || orig); return Promise.resolve({ ok: true, limites: fechas || orig }); }
+      if (MODE === "local") { lss("pi-calendario", fechas ? JSON.stringify(fechas) : null); var orig = window.PI_CAL_ORIGINAL || null, lci = lsg("pi-cierre"), lst = (fechas || orig || []).slice(0, 8).concat(lci ? [lci] : []); setLimites(lst); return Promise.resolve({ ok: true, limites: lst }); }
       return call({ a: "calendario", fechas: fechas || null }).then(function (r) {
         if (r && r.ok) { setLimites(r.limites); return r; }
         return { ok: false, msg: (r && (r.msg || r.err)) || "No se pudo guardar el calendario." };
+      });
+    },
+    /* Docente: amplía el cierre general (hasta cuándo se pueden entregar semanas atrasadas); null = fecha de la S8. */
+    cierre: function (fecha) {
+      if (MODE === "local") { lss("pi-cierre", fecha || null); var base = (info.limites || window.PI_CAL_ORIGINAL || []).slice(0, 8), lst = base.concat(fecha ? [fecha] : []); setLimites(lst); return Promise.resolve({ ok: true, limites: lst }); }
+      return call({ a: "cierre", fecha: fecha || null }).then(function (r) {
+        if (r && r.ok) { setLimites(r.limites); return r; }
+        var m = (r && (r.msg || r.err)) || "No se pudo guardar el cierre general.";
+        return { ok: false, msg: /desconocida/i.test(m) ? "El servidor todavía no tiene esta función: actualiza Code.gs en Apps Script y crea una nueva implementación." : m };
       });
     },
     /* El alumno se une a un equipo de su grupo (lo valida el servidor). */

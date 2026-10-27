@@ -54,6 +54,7 @@ function responder_(q) {
       case "draw":    return salida_(sortear_(yo, Number(q.t), q.pool || []));
       case "asignar": return salida_(asignar_(yo, String(q.id || ""), String(q.nombre || ""), Number(q.eq) || 0));
       case "calendario": return salida_(yo.rol === "docente" ? guardarCalendario_(q.fechas) : { ok: false, err: "privacidad", msg: MSG_PRIVACIDAD });
+      case "cierre":  return salida_(yo.rol === "docente" ? guardarCierre_(q.fecha) : { ok: false, err: "privacidad", msg: MSG_PRIVACIDAD });
       case "nuevaClave": return salida_(yo.rol === "docente" ? nuevaClave_(Number(q.t)) : { ok: false, err: "privacidad", msg: MSG_PRIVACIDAD });
       default:        return salida_({ ok: false, err: "Acción desconocida" });
     }
@@ -171,10 +172,10 @@ function lugares_(g) { var c = conteos_(g), o = {}; Object.keys(c).forEach(funct
 function hola_(yo) {
   if (yo.rol === "docente") {
     var r = {}; alumnos_().lista.forEach(function (a) { (r[a.g] = r[a.g] || []).push([a.ap, a.no]); });
-    return { ok: true, rol: "docente", roster: r, rev: revActual_(), hoja: SpreadsheetApp.getActive().getUrl(), limites: limites_(), claves: claves_().porEquipo };
+    return { ok: true, rol: "docente", roster: r, rev: revActual_(), hoja: SpreadsheetApp.getActive().getUrl(), limites: limitesApi_(), claves: claves_().porEquipo };
   }
   var a = yo.a;
-  return { ok: true, rol: "alumno", clave: !!yo.clave, nombre: a.id ? a.n : "", grupo: a.g, equipo: a.eq || 0, me: a.id, max: MAX_EQUIPO, pub: a.eq ? null : lugares_(a.g), rev: revActual_(), limites: limites_() };
+  return { ok: true, rol: "alumno", clave: !!yo.clave, nombre: a.id ? a.n : "", grupo: a.g, equipo: a.eq || 0, me: a.id, max: MAX_EQUIPO, pub: a.eq ? null : lugares_(a.g), rev: revActual_(), limites: limitesApi_() };
 }
 
 /* ---------- Almacén: una fila por documento en la hoja «datos» ---------- */
@@ -229,7 +230,7 @@ function vista_(yo, p, d) {
 
 function desde_(yo, v) {
   var actual = revActual_();
-  if (v >= actual && v > 0) return { ok: true, rev: actual, docs: [], limites: limites_() };
+  if (v >= actual && v > 0) return { ok: true, rev: actual, docs: [], limites: limitesApi_() };
   var t = leerTodo_(), out = [], vistos = {};
   if (yo.rol === "docente") {
     Object.keys(t.filas).forEach(function (p) {
@@ -238,7 +239,7 @@ function desde_(yo, v) {
       out.push([p, d == null ? null : vista_(yo, p, d)]); vistos[p] = 1;
     });
     for (var n = 1; n <= 10; n++) { var tp = "teams/" + n; if (!vistos[tp]) out.push([tp, vista_(yo, tp, t.filas[tp] ? parse_(t.filas[tp].json) : null)]); }
-    return { ok: true, rev: actual, docs: out, limites: limites_() };
+    return { ok: true, rev: actual, docs: out, limites: limitesApi_() };
   }
   // Alumno: se envía completo su propio alcance (son pocos documentos).
   Object.keys(t.filas).forEach(function (p) {
@@ -248,7 +249,7 @@ function desde_(yo, v) {
   });
   if (yo.a.eq && !vistos["teams/" + yo.a.eq]) out.push(["teams/" + yo.a.eq, vista_(yo, "teams/" + yo.a.eq, null)]);
   if (yo.a.eq) out.push(["pub/libres", { n: alumnos_().lista.filter(function (x) { return x.g === yo.a.g && !x.eq; }).map(function (x) { return x.n; }) }]);
-  return { ok: true, rev: actual, full: true, docs: out, limites: limites_() };
+  return { ok: true, rev: actual, full: true, docs: out, limites: limitesApi_() };
 }
 function leerDoc_(yo, p) {
   if (!p) return { ok: false, err: "ruta vacía" };
@@ -341,12 +342,12 @@ function venceMs_(i, d) {
   if (d && d.ext && /^\d{4}-\d{2}-\d{2}$/.test(d.ext)) lim = Math.max(lim, new Date(d.ext + "T23:59:59-05:00").getTime());
   return lim;
 }
-/* ¿Se puede seguir capturando la semana i? Sí, hasta el cierre general (fecha de la S8) o una prórroga posterior. */
+/* ¿Se puede seguir capturando la semana i? Sí, hasta el cierre general (fecha de la S8 o la ampliación
+   que fije la docente, hasta 5 años) o una prórroga posterior de esa semana. */
 function plazoAbierto_(i, d) {
   var L = limites_();
   if (!L[i]) return true;
-  var cierre = new Date(L[L.length - 1] + "T23:59:59-05:00").getTime();
-  return Date.now() <= Math.max(venceMs_(i, d), cierre);
+  return Date.now() <= Math.max(venceMs_(i, d), cierreMs_());
 }
 /* Nombres de organización normalizados para comparar ("Café Ñ" = "cafe-n"). */
 function slug_(n) { return String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
@@ -652,7 +653,37 @@ function guardarCalendario_(fechas) {
   else P.setProperty("CALENDARIO", JSON.stringify(fechas));
   subirRev_();   // avisa a todas las páginas abiertas
   try { generarResumen(); } catch (x) {}
-  return { ok: true, limites: limites_() };
+  return { ok: true, limites: limitesApi_() };
+}
+/* ---------- Cierre general del proyecto ----------
+   Fecha hasta la que los equipos pueden seguir capturando y entregar semanas atrasadas
+   (quedan registradas como tardías). Por omisión es la fecha de la S8; la docente la amplía
+   desde el Panel docente hasta 5 años después de hoy. Se guarda en la propiedad CIERRE. */
+var MAX_ANIOS_CIERRE = 5;
+function cierreGuardado_() {
+  var c = PropertiesService.getScriptProperties().getProperty("CIERRE") || "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : "";
+}
+function cierreMs_() {
+  var L = limites_(), s8 = new Date(L[L.length - 1] + "T23:59:59-05:00").getTime(), c = cierreGuardado_();
+  return c ? Math.max(s8, new Date(c + "T23:59:59-05:00").getTime()) : s8;
+}
+/* Lo que recibe la página: las 8 fechas límite y, si hay ampliación, la fecha de cierre como 9.º elemento. */
+function limitesApi_() { var L = limites_().slice(), c = cierreGuardado_(); if (c) L.push(c); return L; }
+function guardarCierre_(fecha) {
+  var P = PropertiesService.getScriptProperties();
+  if (fecha == null || fecha === "") P.deleteProperty("CIERRE");
+  else {
+    fecha = String(fecha);
+    var L = limites_(), max = Utilities.formatDate(new Date(Date.now() + MAX_ANIOS_CIERRE * 366 * 864e5), "America/Cancun", "yyyy-MM-dd");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || isNaN(new Date(fecha + "T12:00:00-05:00").getTime())) return { ok: false, msg: "Fecha no válida (AAAA-MM-DD)." };
+    if (fecha < L[L.length - 1]) return { ok: false, msg: "El cierre general no puede ser antes de la fecha de la S8 (" + L[L.length - 1] + ")." };
+    if (fecha > max) return { ok: false, msg: "El cierre general puede ampliarse como máximo " + MAX_ANIOS_CIERRE + " años (hasta " + max + ")." };
+    P.setProperty("CIERRE", fecha);
+  }
+  subirRev_();   // avisa a todas las páginas abiertas
+  try { generarResumen(); } catch (x) {}
+  return { ok: true, limites: limitesApi_() };
 }
 function generarResumen() {
   var LIM = limites_();
