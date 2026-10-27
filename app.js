@@ -265,10 +265,13 @@ function Selector({id,items,sel,setSel,max,min}){
 const AG={n:0,at:0,err:false,L:new Set(),set(o){Object.assign(this,o);const v={n:this.n,at:this.at,err:this.err};this.L.forEach(f=>f(v));}};
 const hora=t=>new Date(t).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
 function AutoGuardado(){
- const [s,setS]=useState({n:AG.n,at:AG.at,err:AG.err});
+ const B=window.PI_BACKEND,[s,setS]=useState({n:AG.n,at:AG.at,err:AG.err}),[st,setSt]=useState(()=>B&&B.status?B.status():{state:""});
  useEffect(()=>{AG.L.add(setS);return()=>{AG.L.delete(setS);};},[]);
- return h("span",{className:"pill "+(s.err?"ko":s.n?"wa":s.at?"ok":""),role:"status","aria-live":"polite",style:{whiteSpace:"normal"}},
-  s.err?"No se pudo guardar; se reintentará solo":s.n?"Guardando…":s.at?"✓ Guardado automáticamente a las "+hora(s.at):"Se guarda solo mientras escriben");
+ useEffect(()=>B&&B.onStatus?B.onStatus(setSt):undefined,[]);
+ /* «Guardado» solo cuando el servidor ya lo tiene; sin internet avisa que queda en este navegador y se envía solo. */
+ const off=st.state==="offline",er=st.state==="error",env=st.state==="saving";
+ return h("span",{className:"pill "+(s.err||er||off?"ko":s.n||env?"wa":s.at?"ok":""),role:"status","aria-live":"polite",style:{whiteSpace:"normal"}},
+  off?"Sin conexión: lo escrito queda en este navegador y se enviará solo al volver internet":er?(st.msg||"No se pudo guardar; se reintentará solo"):s.err?"No se pudo guardar; se reintentará solo":s.n||env?"Guardando…":s.at?"✓ Guardado en el servidor a las "+hora(s.at):"Se guarda solo mientras escriben");
 }
 
 /* ---------- Piezas comunes ---------- */
@@ -1797,8 +1800,9 @@ function App(){
    sched.current.delete(key);AG.set(ok?{n:Math.max(0,AG.n-1),at:Date.now(),err:false}:{n:Math.max(0,AG.n-1),err:true});
    setTimeout(()=>{const c=pend.current.get(key);if(c&&c.v===v)pend.current.delete(key)},1500);};
   fns.current[key]=run;timers.current[key]=setTimeout(run,delay==null?800:delay);};
- /* Guarda de inmediato lo pendiente al salir de un campo, al ocultar la pestaña o al cerrar la página. */
+ /* Guarda de inmediato lo pendiente al salir de un campo, al ocultar la pestaña, al cerrar la página o al presionar «Salir». */
  const flushAll=()=>{Object.keys(fns.current).forEach(k=>{clearTimeout(timers.current[k]);const f=fns.current[k];f&&f();});};
+ window.PI_FLUSH=flushAll;
  useEffect(()=>{const vis=()=>{if(document.hidden)flushAll();};
   document.addEventListener("focusout",flushAll);document.addEventListener("visibilitychange",vis);window.addEventListener("pagehide",flushAll);
   return()=>{document.removeEventListener("focusout",flushAll);document.removeEventListener("visibilitychange",vis);window.removeEventListener("pagehide",flushAll);};},[db]);
@@ -1924,8 +1928,18 @@ function Pie({isAdmin,eqSes,quien,salir}){
    h("span",{className:"pill "+L[0],role:"status","aria-live":"polite"},L[1]),
    isAdmin?h("span",{className:"row"},h("span",{className:"sm mut"},"🎓 Sesión de PROFESOR"),B.hoja()?h("a",{className:"sm",href:B.hoja(),target:"_blank",rel:"noopener"},"Abrir Hoja de Google"):null,h("button",{className:"btn alt sm",onClick:salir},"Cerrar sesión"))
    :eqSes?h("span",{className:"row"},h("span",{className:"sm mut"},"👥 "+tLab(eqSes)+(quien?" · "+quien:"")),h("button",{className:"btn alt sm",onClick:salir},"Salir")):null),
+  h(RespaldoNavegador),
   eqSes&&!isAdmin?h("p",{className:"sm mut",style:{marginTop:8}},"🔒 Esta sesión solo abre tu equipo. Si usas una computadora compartida, presiona «Salir» al terminar."):null,
   h("p",{className:"sm mut",style:{marginTop:8}},"Proyecto Integrador · ADM1401 Introducción a la Empresa · Escuela Internacional de Negocios · Universidad Anáhuac Cancún"));
+}
+
+/* Cambios que el servidor no aceptó o que no alcanzaron a enviarse: quedan en este navegador y se pueden descargar. */
+function RespaldoNavegador(){
+ const B=window.PI_BACKEND,[n,setN]=useState(()=>B.respaldoLocal?B.respaldoLocal().length:0);
+ useEffect(()=>B.onStatus?B.onStatus(()=>setN(B.respaldoLocal?B.respaldoLocal().length:0)):undefined,[]);
+ if(!n)return null;
+ const bajar=()=>{const a=B.respaldoLocal(),txt=JSON.stringify(a,null,1);B.download?B.download({filename:"Respaldo_navegador_PI_"+hoyISO()+".json",data:txt}):null;};
+ return h("p",{className:"sm",style:{marginTop:8}},"💾 Este navegador guarda una copia de "+n+" cambio(s) que no llegaron al servidor. ",h("button",{type:"button",className:"btn alt sm",onClick:bajar},"Descargar copia"),h("span",{className:"sm mut"}," (envíala a la docente si te falta información)."));
 }
 
 /* ---------- Respaldo de datos (panel docente) ---------- */

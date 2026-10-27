@@ -78,6 +78,13 @@
   var queue = [];                  // {op, res}
   try { JSON.parse(lsg(K.queue) || "[]").forEach(function (op) { queue.push({ op: op, res: null }); }); } catch (e) {}
   function persistQueue() { lss(K.queue, queue.length ? JSON.stringify(queue.map(function (q) { return q.op; })) : null); }
+  /* Respaldo en este navegador de lo que el servidor no aceptó (o no se alcanzó a enviar al salir).
+     La clave empieza con «PI-» en mayúsculas para que «Salir» no la borre. Guarda hasta 500 cambios. */
+  var K_RESP = "PI-RESPALDO-v1";
+  function respaldar(ops, motivo) {
+    if (!ops || !ops.length) return;
+    try { var a = JSON.parse(lsg(K_RESP) || "[]"); ops.forEach(function (op) { a.push({ at: Date.now(), motivo: motivo, op: op }); }); lss(K_RESP, JSON.stringify(a.slice(-500))); } catch (e) {}
+  }
 
   function call(payload, attempt) {
     var body = Object.assign({ code: code, tok: tok, key: key, yo: yo }, payload);
@@ -109,6 +116,9 @@
     var batch = queue.slice(0, 40);
     call({ a: "write", ops: batch.map(function (q) { return q.op; }) }).then(function (r) {
       if (!r || !r.ok) throw new Error((r && r.err) || "sin respuesta");
+      // Lo que el servidor rechazó completo (plazo cerrado, sin permiso o demasiado largo) queda respaldado aquí.
+      var rech = {}; (r.denied || []).forEach(function (x) { if (x.indexOf("#") < 0) rech[x] = 1; });
+      respaldar(batch.filter(function (q, i) { return rech[q.op.p] || (r.errors || []).indexOf(i) >= 0; }).map(function (q) { return q.op; }), "rechazado por el servidor");
       queue.splice(0, batch.length); persistQueue(); backoff = 0;
       var changed = [];
       Object.keys(r.docs || {}).forEach(function (p) { var d = r.docs[p]; if (d == null) docs.delete(p); else docs.set(p, d); changed.push(p); });
@@ -347,8 +357,23 @@
       return call({ a: "login", pin: String(pin).trim() }).then(function (r) { if (r && r.ok && r.tok) { tok = r.tok; lss(K.tok, tok); lss(K.code, null); return { ok: true }; } return { ok: false }; });
     },
     logout: function () { tok = ""; lss(K.tok, null); },
-    salir: function () { sss(K.key, null); sss(K.tok, null); sss(K.yo, null); lss(K.code, null); lss(K.tok, null); lss(K.queue, null);
-      try { Object.keys(sessionStorage).forEach(function (k) { if (/^pi-/.test(k)) sessionStorage.removeItem(k); }); } catch (e) {} try { Object.keys(localStorage).forEach(function (k) { if (/^pi-/.test(k)) localStorage.removeItem(k); }); } catch (e) {} location.replace(location.pathname); },
+    /* Salir: primero guarda lo que esté escribiéndose y espera a que llegue al servidor (máx. 8 s).
+       Si no hay internet, NO se pierde: queda en este navegador y se envía la próxima vez que el equipo entre. */
+    salir: function () {
+      try { if (typeof window.PI_FLUSH === "function") window.PI_FLUSH(); } catch (e) {}
+      var fin = function () {
+        if (queue.length && !window.confirm("Aún hay " + queue.length + " cambio(s) sin llegar al servidor (¿sin internet?).\n\nNo se perderán: quedan guardados en este navegador y se enviarán la próxima vez que tu equipo entre desde aquí.\n\n¿Salir de todos modos?")) return;
+        if (queue.length) { persistQueue(); respaldar(queue.map(function (q) { return q.op; }), "pendiente al salir"); }
+        sss(K.key, null); sss(K.tok, null); sss(K.yo, null); lss(K.code, null); lss(K.tok, null);
+        try { Object.keys(sessionStorage).forEach(function (k) { if (/^pi-/.test(k)) sessionStorage.removeItem(k); }); } catch (e) {}
+        try { Object.keys(localStorage).forEach(function (k) { if (/^pi-/.test(k) && k !== K.queue && k !== K.db) localStorage.removeItem(k); }); } catch (e) {}
+        location.replace(location.pathname);
+      };
+      if (MODE === "local" || !queue.length) return setTimeout(fin, 0);
+      setStatus("saving"); vaciarCola().then(fin);
+    },
+    /* Respaldo local de cambios no aceptados: la docente o el alumno lo pueden descargar como archivo. */
+    respaldoLocal: function () { try { return JSON.parse(lsg(K_RESP) || "[]"); } catch (e) { return []; } },
     /* Integrante que captura (lo confirma el equipo tras entrar con su clave; el servidor lo valida). */
     setYo: function (id) { yo = String(id || ""); sss(K.yo, yo || null); sess.me = yo; },
     /* Docente: genera una nueva clave para un equipo; la anterior deja de funcionar. */

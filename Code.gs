@@ -24,7 +24,9 @@ var MAX_EQUIPO  = 6;                   // integrantes máximos por equipo
 var PERMITIR_CODIGO_PERSONAL = false;  // true = también aceptar los códigos personales de versiones anteriores
 
 var HOJA_DATOS = "datos", HOJA_ALUMNOS = "Alumnos", HOJA_RESUMEN = "Resumen", HOJA_EQUIPOS = "Equipos";
-var MAX_CELDA = 49000;
+var MAX_CELDA = 45000;      // caracteres por celda (Google Sheets admite 50 000); un documento más largo se reparte en columnas E, F, G…
+var MAX_DOC = 900000;       // tope de seguridad por documento (unas 20 celdas)
+var HOJA_PAPELERA = "papelera";
 var GRUPOS = { L: { n: "Liderazgo", off: 0 }, A: { n: "Administración", off: 5 } };
 // Columnas de la hoja «Alumnos»
 var C_GRUPO = 1, C_AP = 2, C_NOM = 3, C_COD = 4, C_EQ = 5, C_CORREO = 6, C_ENVIO = 7;
@@ -184,10 +186,16 @@ function hojaDatos_() {
   if (!sh) { sh = ss.insertSheet(HOJA_DATOS); sh.getRange(1, 1, 1, 4).setValues([["ruta", "json", "rev", "actualizado"]]).setFontWeight("bold"); sh.setFrozenRows(1); }
   return sh;
 }
+/* Cada documento ocupa una fila: A ruta · B json · C rev · D actualizado · E, F, G… continuación del json
+   cuando no cabe en una sola celda (así ningún texto largo se pierde por el límite de Google Sheets). */
 function leerTodo_() {
-  var sh = hojaDatos_(), n = sh.getLastRow() - 1, filas = {};
-  if (n > 0) sh.getRange(2, 1, n, 3).getValues().forEach(function (r, i) { if (r[0]) filas[r[0]] = { fila: i + 2, json: r[1], rev: Number(r[2]) || 0 }; });
-  return { sh: sh, filas: filas };
+  var sh = hojaDatos_(), n = sh.getLastRow() - 1, w = Math.max(4, sh.getLastColumn()), filas = {};
+  if (n > 0) sh.getRange(2, 1, n, w).getValues().forEach(function (r, i) {
+    if (!r[0]) return;
+    var j = String(r[1] == null ? "" : r[1]); for (var c = 4; c < r.length; c++) { if (r[c] === "" || r[c] == null) break; j += String(r[c]); }
+    filas[r[0]] = { fila: i + 2, json: j, rev: Number(r[2]) || 0 };
+  });
+  return { sh: sh, filas: filas, ancho: w };
 }
 function revActual_() {
   var c = CacheService.getScriptCache().get("rev");
@@ -308,7 +316,8 @@ function escribir_(yo, ops) {
       if (op.t === "delete") d = null;
       else if (op.t === "set") d = dat;
       else d = mezclar_(actual, dat);
-      if (d != null && JSON.stringify(d).length > MAX_CELDA) { errores.push(i); return; }
+      if (d != null && JSON.stringify(d).length > MAX_DOC) { errores.push(i); return; }
+      papelera_(p, actual, d, yo.rol === "docente" ? "Docente" : (yo.a && yo.a.n) || "Equipo " + (yo.a && yo.a.eq));
       cambios[p] = d;
     });
     guardar_(t, cambios);
@@ -325,13 +334,48 @@ function firma_(t, cambios, yo) {
 }
 function guardar_(t, cambios) {
   var claves = Object.keys(cambios); if (!claves.length) return;
-  var nueva = subirRev_(), ahora = new Date(), nuevas = [];
+  var nueva = subirRev_(), ahora = new Date(), nuevas = [], filas = [];
   claves.forEach(function (p) {
-    var fila = [p, cambios[p] == null ? "" : JSON.stringify(cambios[p]), nueva, ahora];
-    if (t.filas[p]) t.sh.getRange(t.filas[p].fila, 1, 1, 4).setValues([fila]);
-    else { nuevas.push(fila); t.filas[p] = { fila: -1, json: fila[1], rev: nueva }; }
+    var j = cambios[p] == null ? "" : JSON.stringify(cambios[p]), partes = [];
+    for (var k = 0; k < j.length; k += MAX_CELDA) partes.push(j.slice(k, k + MAX_CELDA));
+    if (!partes.length) partes.push("");
+    var fila = [p, partes[0], nueva, ahora].concat(partes.slice(1));
+    filas.push(fila);
+    if (t.filas[p]) fila._f = t.filas[p].fila; else nuevas.push(fila);
+    t.filas[p] = { fila: t.filas[p] ? t.filas[p].fila : -1, json: j, rev: nueva };
   });
-  if (nuevas.length) t.sh.getRange(t.sh.getLastRow() + 1, 1, nuevas.length, 4).setValues(nuevas);
+  // Ancho común: el que ya tiene la hoja o el que pida el documento más largo (rellena con vacío para borrar restos viejos).
+  var w = Math.max(t.ancho || 4, t.sh.getLastColumn(), 4);
+  filas.forEach(function (f) { if (f.length > w) w = f.length; });
+  if (t.sh.getMaxColumns() < w) t.sh.insertColumnsAfter(t.sh.getMaxColumns(), w - t.sh.getMaxColumns());
+  t.ancho = w;
+  filas.forEach(function (f) { while (f.length < w) f.push(""); });
+  filas.forEach(function (f) { if (f._f) t.sh.getRange(f._f, 1, 1, w).setValues([f.slice(0, w)]); });
+  if (nuevas.length) t.sh.getRange(t.sh.getLastRow() + 1, 1, nuevas.length, w).setValues(nuevas.map(function (f) { return f.slice(0, w); }));
+}
+
+/* ---------- Papelera: nada de lo escrito se pierde ----------
+   Antes de guardar, compara el documento anterior con el nuevo. Si un texto de 15 caracteres o más
+   se borra o se recorta a menos del 60 %, copia el texto anterior a la hoja «papelera» con la ruta,
+   el campo, quién lo cambió y la fecha. Desde ahí la docente puede recuperarlo. */
+function papelera_(p, antes, despues, quien) {
+  try {
+    if (antes == null) return;
+    var regs = [];
+    (function rec(a, b, ruta) {
+      if (typeof a === "string") {
+        var nb = typeof b === "string" ? b : (b == null ? "" : JSON.stringify(b));
+        if (a.trim().length >= 15 && nb.trim().length < a.trim().length * 0.6) regs.push([ruta.join("."), a, nb]);
+        return;
+      }
+      if (a && typeof a === "object") Object.keys(a).forEach(function (k) { rec(a[k], b && typeof b === "object" ? b[k] : undefined, ruta.concat(k)); });
+    })(antes, despues, []);
+    if (!regs.length) return;
+    var ss = SpreadsheetApp.getActive(), sh = ss.getSheetByName(HOJA_PAPELERA);
+    if (!sh) { sh = ss.insertSheet(HOJA_PAPELERA); sh.getRange(1, 1, 1, 6).setValues([["fecha", "ruta", "campo", "texto anterior (recuperable)", "texto nuevo", "quién"]]).setFontWeight("bold"); sh.setFrozenRows(1); }
+    var ahora = new Date();
+    sh.getRange(sh.getLastRow() + 1, 1, regs.length, 6).setValues(regs.map(function (r) { return [ahora, p, r[0], r[1].slice(0, MAX_CELDA), r[2].slice(0, MAX_CELDA), quien]; }));
+  } catch (e) {}
 }
 
 /* Fecha límite de la semana i: 23:59 de Cancún (UTC-5) o la prórroga del documento. */
