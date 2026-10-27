@@ -116,7 +116,16 @@ window.PI_CAL_ORIGINAL=CALENDARIO.slice();
    los equipos pueden seguir capturando y entregar semanas atrasadas. Máximo 5 años a partir de hoy. */
 let CIERRE_EXT="";
 const MAX_ANIOS=5,maxISO=()=>{const d=new Date();d.setFullYear(d.getFullYear()+MAX_ANIOS);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
-const aplicarCalendario=lista=>{if(Array.isArray(lista)){lista.forEach((d,i)=>{if(W[i]&&/^\d{4}-\d{2}-\d{2}$/.test(d))W[i].d=d;});const c=lista[W.length];CIERRE_EXT=typeof c==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(c)?c:"";}};
+/* Las fechas vigentes salen de dos fuentes: lo que envía el servidor (CAL_SRV) y la copia que la docente
+   guarda en el documento de cada equipo (CAL_EQ, campo «cal»). La copia del equipo manda: así las fechas
+   se conservan aunque el servidor de Apps Script todavía no esté actualizado. */
+let CAL_SRV=null,CAL_EQ=null;
+const isoD=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
+const recalcCal=()=>{W.forEach((w,i)=>{w.d=CALENDARIO[i];});CIERRE_EXT="";
+ [CAL_SRV,CAL_EQ].forEach(l=>{if(!Array.isArray(l))return;l.forEach((d,i)=>{if(W[i]&&isoD(d))W[i].d=d;});if(l.length>W.length||l===CAL_EQ){const c=l[W.length];CIERRE_EXT=isoD(c)?c:"";}});};
+const aplicarCalendario=lista=>{if(Array.isArray(lista)){CAL_SRV=lista;recalcCal();}};
+const aplicarCalEquipo=cal=>{const l=cal&&Array.isArray(cal.lim)&&cal.lim.length===W.length&&cal.lim.every(isoD)?cal.lim.concat([isoD(cal.cierre)?cal.cierre:""]):null;
+ if(JSON.stringify(l)===JSON.stringify(CAL_EQ))return false;CAL_EQ=l;recalcCal();return true;};
 
 /* ---------- Entregas semanales aplicadas a la empresa asignada ---------- */
 const W=[
@@ -1572,7 +1581,7 @@ function FechaSemanaDocente({wi}){
  useEffect(()=>{setV(W[wi].d);setMsg("");},[wi,W[wi].d]);
  if(!B||!B.calendario)return null;
  const mx=maxISO(),okF=/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<=mx;
- const go=async()=>{setBusy(true);setMsg("");const f=W.map((w,i)=>i===wi?v:w.d);const r=await B.calendario(f);setBusy(false);
+ const go=async()=>{setBusy(true);setMsg("");const f=W.map((w,i)=>i===wi?v:w.d);const r0=await B.calendario(f).catch(()=>null),r=window.PI_WCAL?(window.PI_WCAL(f,CIERRE_EXT),{ok:true}):r0;setBusy(false);
   setMsg(r&&r.ok?"✓ La S"+(wi+1)+" ahora vence el "+fdl(v)+" para todos los equipos. El cambio quedó registrado.":"⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  return h("div",{className:"ex",style:{marginTop:10}},h("b",{className:"sm"},"📅 Periodo de entrega de la S"+(wi+1)+" · todos los equipos"),
   h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},
@@ -1622,10 +1631,12 @@ function AvancePendientes({G,TT,teams,allW,grades,openTeam}){
 function CalendarioDocente(){
  const B=window.PI_BACKEND,[f,setF]=useState(()=>W.map(w=>w.d)),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false),[conf,setConf]=useState(false);
  const [ci,setCi]=useState(CIERRE_EXT),[ciMsg,setCiMsg]=useState(""),[ciBusy,setCiBusy]=useState(false);
- useEffect(()=>B.onCalendario?B.onCalendario(l=>{setF(l.slice(0,W.length));setCi(l[W.length]||"");}):undefined,[]);
+ useEffect(()=>B.onCalendario?B.onCalendario(()=>{setF(W.map(w=>w.d));setCi(CIERRE_EXT);}):undefined,[]);
+ useEffect(()=>{setF(W.map(w=>w.d));setCi(CIERRE_EXT);},[W.map(w=>w.d).join(),CIERRE_EXT]);
  const iso=d=>/^\d{4}-\d{2}-\d{2}$/.test(d),ok=f.every(d=>iso(d)&&d<=maxISO()),cambio=f.some((d,i)=>d!==W[i].d),orig=W.every((w,i)=>w.d===CALENDARIO[i]);
- const go=async fechas=>{setBusy(true);setMsg("");const r=await B.calendario(fechas);setBusy(false);setConf(false);
-  if(r&&r.ok){setF((r.limites||CALENDARIO).slice(0,W.length));setMsg(fechas?"✓ Calendario guardado. Todos los equipos ya ven las nuevas fechas.":"✓ Se restauraron las fechas originales.");}else setMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
+ const go=async fechas=>{setBusy(true);setMsg("");const r0=await B.calendario(fechas).catch(()=>null),lim=fechas||CALENDARIO.slice();
+  const r=window.PI_WCAL?(window.PI_WCAL(lim,CIERRE_EXT),{ok:true}):r0;setBusy(false);setConf(false);
+  if(r&&r.ok){setF(lim.slice(0,W.length));setMsg(fechas?"✓ Calendario guardado. Todos los equipos ya ven las nuevas fechas.":"✓ Se restauraron las fechas originales.");}else setMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  if(!B.calendario)return null;
  return h("div",{className:"card"},h("h2",null,"📅 Calendario de entregas · ambos grupos"),
   h("p",{className:"sm mut"},"Cambia la fecha límite de cualquier semana; cada una cierra a las 23:59 (hora de Cancún). ",h("b",null,"No se modifica nada de lo capturado ni entregado"),", ni las prórrogas que hayas dado por equipo: solo se recalcula qué queda a tiempo, vencido o tarde. Las semanas vencidas se pueden seguir entregando hasta el cierre general (abajo)."),
@@ -1650,8 +1661,9 @@ function CierreGeneral({ci,setCi,ciMsg,setCiMsg,ciBusy,setCiBusy,s8}){
  if(!B.cierre)return null;
  const sumar=(meses)=>{const b=v&&v>=s8?v:s8,[a,m,d]=b.split("-").map(Number),x=new Date(a,m-1+meses,d);const r=x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");setV(r>mx?mx:r);setCiMsg("");};
  const valido=/^\d{4}-\d{2}-\d{2}$/.test(v||"")&&v>=s8&&v<=mx,cambio=(v===s8?"":v)!==(ci||"");
- const go=async fecha=>{setCiBusy(true);setCiMsg("");const r=await B.cierre(fecha);setCiBusy(false);
-  if(r&&r.ok){const c=(r.limites||[])[W.length]||"";setCi(c);setCiMsg(c?"✓ Cierre general ampliado al "+fdl(c)+". Todos los equipos ya pueden capturar y entregar sus semanas atrasadas hasta esa fecha.":"✓ El cierre general volvió a la fecha de la S8.");}
+ const go=async fecha=>{setCiBusy(true);setCiMsg("");const r0=await B.cierre(fecha).catch(()=>null);
+  const r=window.PI_WCAL?(window.PI_WCAL(W.map(w=>w.d),fecha||""),{ok:true,limites:W.map(w=>w.d).concat([fecha||""])}):r0;setCiBusy(false);
+  if(r&&r.ok){const c=(r.limites||[])[W.length]||"";setCi(c);setCiMsg(c?"✓ Cierre general ampliado al "+fdl(c)+". Todos los equipos ya pueden capturar y entregar sus semanas atrasadas hasta esa fecha.":"✓ El cierre general volvió a la última fecha del calendario.");}
   else setCiMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  const efectiva=ci&&ci>s8?ci:s8;
  return h("div",{className:"ex",style:{marginTop:14}},
@@ -1888,6 +1900,8 @@ function App(){
  /* Guarda de inmediato lo pendiente al salir de un campo, al ocultar la pestaña, al cerrar la página o al presionar «Salir». */
  const flushAll=()=>{Object.keys(fns.current).forEach(k=>{clearTimeout(timers.current[k]);const f=fns.current[k];f&&f();});};
  window.PI_FLUSH=flushAll;
+ /* Docente: guarda las fechas (8 límites + cierre general) en el documento de cada equipo. */
+ window.PI_WCAL=(lim,cierre)=>{const cal={lim:lim.slice(0,W.length),cierre:cierre||"",at:Date.now()};for(let n=1;n<=NT;n++)write("teams/"+n,["cal"],cal,0);aplicarCalEquipo(cal);};
  useEffect(()=>{const vis=()=>{if(document.hidden)flushAll();};
   document.addEventListener("focusout",flushAll);document.addEventListener("visibilitychange",vis);window.addEventListener("pagehide",flushAll);
   return()=>{document.removeEventListener("focusout",flushAll);document.removeEventListener("visibilitychange",vis);window.removeEventListener("pagehide",flushAll);};},[db]);
@@ -1915,6 +1929,10 @@ function App(){
  useEffect(()=>{if(isAdmin&&view==="inicio")setView("docente");},[isAdmin]);
  useEffect(()=>{if(eqSes&&meOk&&team!==eqSes)go(eqSes,meSes);},[eqSes,meOk]);
  useEffect(()=>{const b=navRef.current&&navRef.current.querySelector("[aria-current=page]");if(b&&b.scrollIntoView)b.scrollIntoView({block:"nearest",inline:"center"});},[view]);
+ /* Fechas guardadas por la docente en los documentos de los equipos (la más reciente manda). */
+ const [,setCalTick]=useState(0);
+ useEffect(()=>{let best=null;(eqSes&&!isAdmin?[String(eqSes)]:Object.keys(teams)).forEach(n=>{const c=teams[n]&&teams[n].cal;if(c&&Array.isArray(c.lim)&&(!best||(c.at||0)>(best.at||0)))best=c;});
+  if(best&&aplicarCalEquipo(best))setCalTick(x=>x+1);},[teams]);
  const tm=teams[team]||{},myName=nameOf(tm,me),inTeam=!!team;nameRef.current=myName?myName+(rolesAOf(tm,me).length?" · "+rolesAOf(tm,me).join("/"):""):"";
  /* Organizaciones ya elegidas por otros equipos (slug → número de equipo, o -1 si el servidor no dice cuál). */
  const tomadas={};Object.keys(teams).forEach(n=>{if(+n===team)return;const tx=teams[n]||{},al=tx.alts||{};["A","B","C"].forEach(k=>{if(al[k]&&str(al[k].n).trim())tomadas[slug(al[k].n)]=+n;});const e=empOfTeam(tx);if(e)tomadas[slug(e.n)]=+n;});

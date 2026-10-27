@@ -273,7 +273,7 @@ function mezclar_(a, b) { var o = esObj_(a) ? JSON.parse(JSON.stringify(a)) : {}
 /* Un alumno no puede cambiar la lista de integrantes (vive en la hoja «Alumnos»). */
 function limpiarAlumno_(d) {
   d = JSON.parse(JSON.stringify(d || {}));
-  ["mem", "sorteoAt", "sorteoBy", "ajustes"].forEach(function (k) { delete d[k]; });
+  ["mem", "sorteoAt", "sorteoBy", "ajustes", "cal"].forEach(function (k) { delete d[k]; });
   if (esObj_(d.alts)) ["A", "B"].forEach(function (k) { if (esObj_(d.alts[k])) { delete d.alts[k].n; delete d.alts[k].orig; delete d.alts[k].tipo; } });
   return d;
 }
