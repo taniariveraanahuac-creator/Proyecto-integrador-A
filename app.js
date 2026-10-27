@@ -1595,6 +1595,36 @@ function FechaSemanaDocente({wi}){
   msg?h("p",{className:"sm",role:"status"},msg):null);
 }
 
+/* ---------- Prórrogas (docente) ----------
+   Da una nueva fecha límite a uno o varios equipos en una o varias semanas. Se guarda en el documento
+   de la semana de cada equipo (campo «ext»), así que se conserva aunque se recargue la página.
+   Con prórroga el equipo puede editar y entregar hasta esa fecha; el atraso (−1 punto por semana)
+   se sigue contando desde la fecha límite del calendario, salvo que la docente lo condone. */
+function Prorrogas({G,TT,teams,allW,wwk}){
+ const [eqs,setEqs]=useState([]),[sems,setSems]=useState([]),[f,setF]=useState(""),[msg,setMsg]=useState(""),[loc2,setLoc2]=useState({});
+ const extOf=(n,i)=>{const k=n+"/"+i;return loc2.hasOwnProperty(k)?loc2[k]:str(((allW[n]||{})[i]||{}).ext);};
+ const mx=maxISO(),okF=/^\d{4}-\d{2}-\d{2}$/.test(f)&&f<=mx,listo=okF&&eqs.length&&sems.length;
+ const tog=(arr,set,v)=>set(arr.includes(v)?arr.filter(x=>x!==v):arr.concat(v));
+ const guardar=()=>{const nl={...loc2};let k=0;eqs.forEach(n=>sems.forEach(i=>{wwk(n,i,["ext"],f);nl[n+"/"+i]=f;k++;}));setLoc2(nl);
+  setMsg("✓ Prórroga al "+fdl(f)+" guardada: "+k+" entrega"+(k>1?"s":"")+" ("+eqs.map(n=>"Equipo "+loc(n)).join(", ")+" · "+sems.map(i=>"S"+(i+1)).join(", ")+").");setEqs([]);setSems([]);};
+ const quitar=(n,i)=>{wwk(n,i,["ext"],"");setLoc2(p=>({...p,[n+"/"+i]:""}));setMsg("Se quitó la prórroga del Equipo "+loc(n)+" en la S"+(i+1)+".");};
+ const chk=(on,l,fn,key)=>h("label",{key,className:"sm",style:{display:"inline-flex",gap:4,alignItems:"center",marginRight:12,cursor:"pointer"}},h("input",{type:"checkbox",checked:on,onChange:fn}),l);
+ return h("div",{className:"card"},h("h2",null,"⏳ Prórrogas · "+G.n),
+  h("p",{className:"sm mut"},"Elige el equipo, la semana y la nueva fecha. El equipo podrá capturar y entregar hasta esa fecha a las 23:59. La prórroga se guarda y se mantiene; puedes quitarla cuando quieras. ",h("b",null,"El atraso se sigue contando desde la fecha del calendario (−"+PENAL+" punto por semana)"),", salvo que lo condones al calificar."),
+  h("div",{style:{marginTop:8}},h("b",{className:"sm"},"1. Equipos: "),TT.map(n=>chk(eqs.includes(n),"Equipo "+loc(n),()=>tog(eqs,setEqs,n),n)),
+   h("button",{type:"button",className:"btn alt sm",onClick:()=>setEqs(eqs.length===TT.length?[]:TT.slice())},eqs.length===TT.length?"Ninguno":"Todos")),
+  h("div",{style:{marginTop:8}},h("b",{className:"sm"},"2. Semanas: "),W.map((w,i)=>chk(sems.includes(i),"S"+(i+1),()=>tog(sems,setSems,i),i)),
+   h("button",{type:"button",className:"btn alt sm",onClick:()=>setSems(sems.length===W.length?[]:W.map((_,i)=>i))},sems.length===W.length?"Ninguna":"Todas")),
+  h("div",{className:"row",style:{marginTop:8,alignItems:"flex-end"}},
+   h("div",null,h("label",{className:"l sm",htmlFor:"pr-f",style:{marginTop:0}},"3. Nueva fecha límite (23:59)"),h("input",{id:"pr-f",type:"date",value:f,max:mx,onChange:e=>{setF(e.target.value);setMsg("");}})),
+   h("button",{className:"btn sm",disabled:!listo,onClick:guardar},"Guardar prórroga"+(eqs.length*sems.length>1?" ("+eqs.length*sems.length+")":""))),
+  msg?h("p",{className:"sm",role:"status",style:{marginTop:8}},msg):null,
+  h("div",{className:"w",style:{marginTop:10}},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),W.map((w,i)=>h("th",{key:i},"S"+(i+1),h("br"),h("small",null,dt(w.d).toLocaleDateString("es-MX",{day:"2-digit",month:"2-digit"})))))),
+   h("tbody",null,TT.map(n=>h("tr",{key:n},h("td",null,h("b",null,"Equipo "+loc(n))),W.map((w,i)=>{const e=extOf(n,i);
+    return h("td",{key:i,className:"c "+(e?"wa":""),title:e?"Prórroga hasta el "+fdl(e):"Sin prórroga"},e?h("span",null,dt(e).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}),h("br"),h("button",{type:"button",className:"btn alt sm",style:{padding:"0 6px",marginTop:2},"aria-label":"Quitar prórroga Equipo "+loc(n)+" S"+(i+1),onClick:()=>quitar(n,i)},"✕")):"—");})))))),
+  h("p",{className:"sm mut",style:{marginTop:6}},"En amarillo, las entregas con prórroga y su nueva fecha. «✕» la quita."));
+}
+
 /* ---------- Avance y pendientes por equipo (docente) ----------
    Por equipo: % de avance (requisitos cumplidos de la lista de verificación de las 8 semanas), entregas,
    semanas vencidas sin entregar, penalización acumulada, última edición y, semana por semana,
@@ -1772,7 +1802,7 @@ function CalifAlumnosDocente({G,teams,allW,grades,openTeam}){
     h("td",{className:"c"},h("b",null,f.prom==null?"—":f.prom.toFixed(1))),h("td",null,h("button",{className:"btn alt sm",onClick:()=>openTeam(f.t)},"Abrir")))):h("tr",null,h("td",{colSpan:12},"Aún no hay alumnos en equipos."))))));
 }
 
-function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen,wt,addMem}){
+function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,claves,regen,wt,wwk,addMem}){
  const [conf,setConf]=useState("");
  const [pg,setPg]=useState(()=>lsGet("pi-pg")||"L");
  const G=GRUPOS.find(x=>x.k===pg)||GRUPOS[0],TT=[1,2,3,4,5].map(i=>G.off+i),reg=regMap(G,teams),sin=rosterOf(G).map(fullName).filter(n=>!reg[norm(n)]);
@@ -1783,6 +1813,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
   h(ClavesEquipo,{claves:claves||{},regen,teams}),
   h(RevisionDocente,{teams,grades,openTeam,wg2}),
   h(CalendarioDocente),
+  h(Prorrogas,{G,TT,teams,allW,wwk}),
   h("div",{className:"kpi"},h("div",null,h("b",null,"S"+(sa+1)+": "+entSa+"/5"),"Entregaron la semana en curso"),h("div",null,h("b",null,tot?Math.round(ent/tot*100)+"%":"0%"),"Entregas del semestre"),h("div",{className:rojo?"ko":""},h("b",null,rojo),"Entregas vencidas"),h("div",null,h("b",null,sin.length),"Alumnos sin equipo")),
   h("div",null,h("h2",null,"Tablero de entregas · "+G.n),
    h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Organización"),W.map((w,i)=>h("th",{key:i,style:i===sa?{outline:"3px solid #fff",outlineOffset:-4}:null},"S"+(i+1),h("br"),h("small",null,dt(w.d).toLocaleDateString("es-MX",{day:"2-digit",month:"2-digit"})))),h("th",null,"%"),h("th",null,""))),
@@ -2008,7 +2039,7 @@ function App(){
  else if(view==="opciones")body=h(Opciones,{sorteo,teams,team,isAdmin});
  else if(view==="sorteo")body=h(Sorteo,{teams,sorteo,isAdmin,me,team,drawAB,releaseDraw,reassign,request,attend,wC:(t,f,v,d)=>write("teams/"+t,["alts","C",f],v,d)});
  else if(view==="inicio"||(!inTeam&&!/^(docente|reportes|sorteo|opciones|instr)$/.test(view)))body=h(Start,{teams,go,isAdmin,eqSes,meSes,nav});
- else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),wt:(n,p,v)=>write("teams/"+n,p,v,0),addMem,openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
+ else if(view==="docente"&&isAdmin)body=h(Docente,{teams,allW,grades,sorteo,releaseDraw,reopen,claves,regen,wg2:(n,p,v)=>write("grades/"+n,p,v),wt:(n,p,v)=>write("teams/"+n,p,v,0),wwk:(n,i,p,v)=>write("teams/"+n+"/w/"+i,p,v,0),addMem,openTeam:n=>{setTeam(n);setMe("");nav("entregas");}});
  else if(view==="reportes"&&isAdmin)body=h(Reportes,{teams,allW,grades});
  else if(view==="equipo")body=h(Equipo,{t:team,tm,me,teams,isAdmin,myName,sorteo,drawAB,reassign,tomadas,wdocs,addMem,libresSrv:(pub.libres&&pub.libres.n)||[],setView:nav,wm:(p,v,d)=>write("teams/"+team,p,v,d)});
  else if(view==="entregas")body=h(Entregas,{t:team,tm,wdocs,me,isAdmin,setView,gr:grades[team]||{},wl:(i,p,v)=>write("teams/"+team+"/w/"+i,p,v)});
