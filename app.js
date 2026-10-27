@@ -195,7 +195,8 @@ const showC=(wi,i,v)=>typeof v==="string"?v:fm(W[wi].c[i][0])(v);
    cierre general del proyecto (fecha de la S8, o una prórroga posterior). Lo que se entregue después
    de la fecha límite queda registrado como entrega tardía, con los días de retraso. */
 const vence=(wi,wd)=>Math.max(dt(W[wi].d).getTime(),wd&&wd.ext?dt(wd.ext).getTime():0);
-const cierreGeneral=()=>Math.max(dt(W[W.length-1].d).getTime(),CIERRE_EXT?dt(CIERRE_EXT).getTime():0);
+const ultimaFecha=()=>W.map(w=>w.d).sort().pop();
+const cierreGeneral=()=>Math.max(dt(ultimaFecha()).getTime(),CIERRE_EXT?dt(CIERRE_EXT).getTime():0);
 const limite=(wi,wd)=>Math.max(vence(wi,wd),cierreGeneral());
 const abierta=(wi,wd)=>Date.now()<=limite(wi,wd);
 const vencida=(wi,wd)=>Date.now()>vence(wi,wd);
@@ -1570,17 +1571,49 @@ function FechaSemanaDocente({wi}){
  const B=window.PI_BACKEND,[v,setV]=useState(W[wi].d),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false);
  useEffect(()=>{setV(W[wi].d);setMsg("");},[wi,W[wi].d]);
  if(!B||!B.calendario)return null;
- const prev=wi?W[wi-1].d:"",next=wi<W.length-1?W[wi+1].d:"",mx=maxISO();
- const okF=/^\d{4}-\d{2}-\d{2}$/.test(v)&&(!prev||v>=prev)&&(!next||v<=next)&&v<=mx;
+ const mx=maxISO(),okF=/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<=mx;
  const go=async()=>{setBusy(true);setMsg("");const f=W.map((w,i)=>i===wi?v:w.d);const r=await B.calendario(f);setBusy(false);
   setMsg(r&&r.ok?"✓ La S"+(wi+1)+" ahora vence el "+fdl(v)+" para todos los equipos. El cambio quedó registrado.":"⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  return h("div",{className:"ex",style:{marginTop:10}},h("b",{className:"sm"},"📅 Periodo de entrega de la S"+(wi+1)+" · todos los equipos"),
   h("div",{className:"row",style:{marginTop:6,alignItems:"flex-end"}},
-   h("div",null,h("label",{className:"l sm",htmlFor:"fs"+wi,style:{marginTop:0}},"Fecha límite (23:59)"),h("input",{id:"fs"+wi,type:"date",value:v,min:prev||undefined,max:next||mx,onChange:e=>{setV(e.target.value);setMsg("");}})),
+   h("div",null,h("label",{className:"l sm",htmlFor:"fs"+wi,style:{marginTop:0}},"Fecha límite (23:59)"),h("input",{id:"fs"+wi,type:"date",value:v,max:mx,onChange:e=>{setV(e.target.value);setMsg("");}})),
    h("button",{className:"btn sm",disabled:busy||!okF||v===W[wi].d,onClick:go},busy?"Guardando…":"Cambiar fecha de la S"+(wi+1))),
-  !okF&&v?h("p",{className:"sm",style:{color:"var(--kot)"}},"Debe quedar entre la S"+wi+(prev?" ("+fdl(prev)+")":"")+" y la S"+(wi+2)+(next?" ("+fdl(next)+")":"")+". Para moverla más allá, cambia también las semanas siguientes en «Calendario de entregas»."):null,
+  !okF&&v?h("p",{className:"sm",style:{color:"var(--kot)"}},"Elige una fecha válida (máximo "+fdl(mx)+")."):null,
   h("p",{className:"sm mut",style:{marginTop:6}},"Original: "+fdl(CALENDARIO[wi])+". El atraso y la penalización se calculan con la fecha vigente. Si prefieres dar más tiempo sin quitar la penalización, usa la prórroga por equipo o el cierre general."),
   msg?h("p",{className:"sm",role:"status"},msg):null);
+}
+
+/* ---------- Avance y pendientes por equipo (docente) ----------
+   Por equipo: % de avance (requisitos cumplidos de la lista de verificación de las 8 semanas), entregas,
+   semanas vencidas sin entregar, penalización acumulada, última edición y, semana por semana,
+   exactamente lo que le falta. Se puede descargar en CSV o imprimir. */
+function AvancePendientes({G,TT,teams,allW,grades,openTeam}){
+ const [ab,setAb]=useState({}),[solo,setSolo]=useState(false);
+ const datos=TT.map(n=>{const tm=teams[n]||{},wd=allW[n]||{},gr=grades[n]||{};let ok=0,tot=0,pen=0,ult=0;
+  const sem=W.map((w,i)=>{const d=wd[i]||{},ck=checklist(i,d,tm),st=estado(d,i),hecho=ck.filter(x=>x[1]).length;ok+=hecho;tot+=ck.length;
+   const ent=d.est==="Entregado";if(ent||califBase(gr,i)!=null)pen+=semRetraso(i,d,gr)*PENAL;if(d._at&&d._at>ult)ult=d._at;
+   return {i,st,ent,hecho,total:ck.length,falta:ck.filter(x=>!x[1]).map(x=>x[0]),venc:!ent&&Date.now()>vence(i,d),at:d.at};});
+  const ent=sem.filter(x=>x.ent).length,venc=sem.filter(x=>x.venc).length;
+  return {n,tm,e:empOfTeam(tm),sem,ent,venc,pen,ult,av:tot?Math.round(ok/tot*100):0};});
+ const csv=()=>{const rows=[["Grupo","Equipo","Organización","Avance %","Entregadas","Vencidas sin entregar","Penalización (puntos)","Última edición","Semana","Estado","Requisitos cumplidos","Pendiente"]];
+  datos.forEach(x=>x.sem.forEach(s=>rows.push([G.n,loc(x.n),x.e?x.e.n:"",x.av,x.ent,x.venc,x.pen,x.ult?fmt(x.ult):"","S"+(s.i+1),s.st.l,s.hecho+"/"+s.total,s.ent?"":s.falta.join(" | ")])));
+  const B=window.PI_BACKEND,txt="\ufeff"+rows.map(r=>r.map(csvq).join(",")).join("\n");
+  if(B&&B.download)B.download({filename:"Avance_pendientes_"+G.n+"_"+hoyISO()+".csv",data:txt});};
+ return h("div",{className:"card"},h("div",{className:"bar"},h("h2",{style:{margin:0}},"📊 Avance y pendientes por equipo · "+G.n),
+   h("span",{className:"row noprint"},h("label",{className:"sm"},h("input",{type:"checkbox",checked:solo,onChange:e=>setSolo(e.target.checked)})," Solo semanas con pendientes"),
+    h("button",{className:"btn alt sm",onClick:()=>setAb(datos.every(x=>ab[x.n])?{}:Object.fromEntries(datos.map(x=>[x.n,true])))},datos.every(x=>ab[x.n])?"Contraer todo":"Ver todo el detalle"),
+    h("button",{className:"btn alt sm",onClick:csv},"⬇️ CSV"),h("button",{className:"btn alt sm",onClick:()=>{setAb(Object.fromEntries(datos.map(x=>[x.n,true])));setTimeout(()=>window.print(),300);}},"🖨️ Imprimir"))),
+  h("p",{className:"sm mut"},"El avance cuenta los requisitos cumplidos de la lista de verificación de las 8 semanas. «Pendiente» es exactamente lo que le falta a cada equipo en cada semana que no ha entregado."),
+  h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Avance"),h("th",null,"Entregadas"),h("th",null,"Vencidas sin entregar"),h("th",null,"Penalización"),h("th",null,"Última edición"),h("th",null,""))),
+   h("tbody",null,datos.map(x=>[h("tr",{key:x.n},
+     h("td",null,h("b",null,"Equipo "+loc(x.n)),h("div",{className:"sm mut"},x.e?x.e.n:"Sin organización")),
+     h("td",{style:{minWidth:120}},h("div",{style:{background:"var(--soft)",borderRadius:6,height:10,overflow:"hidden"}},h("div",{style:{width:x.av+"%",height:"100%",background:x.av>=80?"var(--okt, #2e7d32)":x.av>=40?"var(--or)":"var(--kot)"}})),h("span",{className:"sm"},x.av+"%")),
+     h("td",{className:"c"},x.ent+"/8"),h("td",{className:"c "+(x.venc?"ko":"")},x.venc),h("td",{className:"c "+(x.pen?"ko":"")},x.pen?"−"+x.pen:"0"),
+     h("td",{className:"sm"},x.ult?fmt(x.ult):"—"),
+     h("td",{className:"noprint"},h("span",{className:"row"},h("button",{className:"btn alt sm",onClick:()=>setAb(p=>({...p,[x.n]:!p[x.n]}))},ab[x.n]?"Ocultar":"Pendientes"),h("button",{className:"btn alt sm",onClick:()=>openTeam(x.n)},"Abrir")))),
+    ab[x.n]?h("tr",{key:x.n+"d"},h("td",{colSpan:7},h("ul",{style:{margin:"4px 0",paddingLeft:"1.2em"}},
+     x.sem.filter(s=>!solo||(!s.ent&&s.falta.length)).map(s=>h("li",{key:s.i,className:"sm",style:{marginBottom:4}},h("b",null,"S"+(s.i+1)+" · "),h("span",{className:"pill "+s.st.c,style:{whiteSpace:"normal"}},s.st.l)," ",s.hecho+"/"+s.total+" requisitos",
+      s.ent?null:s.falta.length?h("ul",{style:{margin:"2px 0",paddingLeft:"1.2em"}},s.falta.map((f,k)=>h("li",{key:k,style:{color:s.venc?"var(--kot)":undefined}},"Falta: "+f))):h("span",{className:"mut"}," · lista completa; falta que el CEO la marque como entregada")))))):null])))));
 }
 
 /* ---------- Calendario de entregas (docente) ----------
@@ -1590,7 +1623,7 @@ function CalendarioDocente(){
  const B=window.PI_BACKEND,[f,setF]=useState(()=>W.map(w=>w.d)),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false),[conf,setConf]=useState(false);
  const [ci,setCi]=useState(CIERRE_EXT),[ciMsg,setCiMsg]=useState(""),[ciBusy,setCiBusy]=useState(false);
  useEffect(()=>B.onCalendario?B.onCalendario(l=>{setF(l.slice(0,W.length));setCi(l[W.length]||"");}):undefined,[]);
- const iso=d=>/^\d{4}-\d{2}-\d{2}$/.test(d),ok=f.every((d,i)=>iso(d)&&(i===0||d>=f[i-1])&&d<=maxISO()),cambio=f.some((d,i)=>d!==W[i].d),orig=W.every((w,i)=>w.d===CALENDARIO[i]);
+ const iso=d=>/^\d{4}-\d{2}-\d{2}$/.test(d),ok=f.every(d=>iso(d)&&d<=maxISO()),cambio=f.some((d,i)=>d!==W[i].d),orig=W.every((w,i)=>w.d===CALENDARIO[i]);
  const go=async fechas=>{setBusy(true);setMsg("");const r=await B.calendario(fechas);setBusy(false);setConf(false);
   if(r&&r.ok){setF((r.limites||CALENDARIO).slice(0,W.length));setMsg(fechas?"✓ Calendario guardado. Todos los equipos ya ven las nuevas fechas.":"✓ Se restauraron las fechas originales.");}else setMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  if(!B.calendario)return null;
@@ -1598,15 +1631,15 @@ function CalendarioDocente(){
   h("p",{className:"sm mut"},"Cambia la fecha límite de cualquier semana; cada una cierra a las 23:59 (hora de Cancún). ",h("b",null,"No se modifica nada de lo capturado ni entregado"),", ni las prórrogas que hayas dado por equipo: solo se recalcula qué queda a tiempo, vencido o tarde. Las semanas vencidas se pueden seguir entregando hasta el cierre general (abajo)."),
   h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Semana"),h("th",null,"Entrega"),h("th",null,"Fecha original"),h("th",null,"Fecha límite"))),
    h("tbody",null,W.map((w,i)=>h("tr",{key:i},h("td",{className:"c"},h("b",null,"S"+(i+1))),h("td",null,w.t),h("td",{className:"c sm mut"},dt(CALENDARIO[i]).toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"})),
-    h("td",{className:f[i]!==W[i].d?"wa":""},h("input",{type:"date","aria-label":"Fecha límite S"+(i+1),value:f[i]||"",min:i?f[i-1]:undefined,max:i<W.length-1?f[i+1]:maxISO(),onChange:e=>{const v=e.target.value;setF(p=>p.map((x,k)=>k===i?v:x));setMsg("");}}))))))),
-  !ok?h("p",{className:"sm",style:{color:"var(--kot)"}},"Revisa las fechas: deben ir en orden (S1 ≤ S2 ≤ … ≤ S8) y no pasar de "+MAX_ANIOS+" años a partir de hoy."):null,
+    h("td",{className:f[i]!==W[i].d?"wa":""},h("input",{type:"date","aria-label":"Fecha límite S"+(i+1),value:f[i]||"",max:maxISO(),onChange:e=>{const v=e.target.value;setF(p=>p.map((x,k)=>k===i?v:x));setMsg("");}}))))))),
+  !ok?h("p",{className:"sm",style:{color:"var(--kot)"}},"Revisa las fechas: deben estar completas y no pasar de "+MAX_ANIOS+" años a partir de hoy."):null,
   h("div",{className:"row",style:{marginTop:10}},
    conf?h("span",{className:"row"},h("span",{className:"sm"},"¿Guardar el nuevo calendario para todos los equipos?"),h("button",{className:"btn sm",disabled:busy,onClick:()=>go(f)},busy?"Guardando…":"Sí, guardar"),h("button",{className:"btn alt sm",onClick:()=>setConf(false)},"No"))
     :h("button",{className:"btn sm",disabled:busy||!ok||!cambio,onClick:()=>setConf(true)},"Guardar calendario"),
    cambio?h("button",{className:"btn alt sm",disabled:busy,onClick:()=>{setF(W.map(w=>w.d));setMsg("");setConf(false);}},"Descartar cambios"):null,
    !orig?h("button",{className:"btn alt sm",disabled:busy,onClick:()=>go(null)},"Restaurar fechas originales"):null),
   msg?h("p",{className:"sm",role:"status",style:{marginTop:8}},msg):null,
-  h(CierreGeneral,{ci,setCi,ciMsg,setCiMsg,ciBusy,setCiBusy,s8:f[W.length-1]||W[W.length-1].d}));
+  h(CierreGeneral,{ci,setCi,ciMsg,setCiMsg,ciBusy,setCiBusy,s8:f.filter(iso).slice().sort().pop()||ultimaFecha()}));
 }
 /* Cierre general: hasta cuándo los equipos pueden capturar y entregar semanas atrasadas (todas las semanas,
    todos los equipos). La docente escribe la fecha a mano o usa los atajos; máximo 5 años a partir de hoy.
@@ -1624,14 +1657,14 @@ function CierreGeneral({ci,setCi,ciMsg,setCiMsg,ciBusy,setCiBusy,s8}){
  return h("div",{className:"ex",style:{marginTop:14}},
   h("h3",{style:{marginTop:0}},"🔓 Cierre general · semanas atrasadas"),
   h("p",{className:"sm mut"},"Hasta esta fecha los equipos pueden ",h("b",null,"seguir capturando, guardando y entregando cualquier semana vencida"),", aunque ya haya pasado la S8. Lo que entreguen después de la fecha límite de cada semana queda registrado como tardío (puedes condonar el retraso en la calificación). Puedes ampliarlo hasta ",h("b",null,MAX_ANIOS+" años")," (máximo "+fdl(mx)+")."),
-  h("p",{className:"sm"},"Cierre vigente: ",h("b",null,fdl(efectiva)+", 23:59"),ci&&ci>s8?" (ampliado)":" (fecha de la S8)"),
+  h("p",{className:"sm"},"Cierre vigente: ",h("b",null,fdl(efectiva)+", 23:59"),ci&&ci>s8?" (ampliado)":" (última fecha del calendario)"),
   h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
    h("div",null,h("label",{className:"l sm",htmlFor:"cierre-gral",style:{marginTop:0}},"Nueva fecha de cierre (escríbela o elígela)"),h("input",{id:"cierre-gral",type:"date",value:v||"",min:s8,max:mx,onChange:e=>{setV(e.target.value);setCiMsg("");}})),
    [["+1 mes",1],["+6 meses",6],["+1 año",12],["+5 años",60]].map(([l,m])=>h("button",{key:l,type:"button",className:"btn alt sm",disabled:ciBusy,onClick:()=>sumar(m)},l))),
-  v&&!valido?h("p",{className:"sm",style:{color:"var(--kot)"}},"La fecha debe estar entre la S8 ("+fdl(s8)+") y "+fdl(mx)+"."):null,
+  v&&!valido?h("p",{className:"sm",style:{color:"var(--kot)"}},"La fecha debe estar entre la última fecha del calendario ("+fdl(s8)+") y "+fdl(mx)+"."):null,
   h("div",{className:"row",style:{marginTop:8}},
    h("button",{className:"btn sm",disabled:ciBusy||!valido||!cambio,onClick:()=>go(v===s8?null:v)},ciBusy?"Guardando…":"Guardar cierre general"),
-   ci?h("button",{className:"btn alt sm",disabled:ciBusy,onClick:()=>go(null)},"Volver a la fecha de la S8"):null),
+   ci?h("button",{className:"btn alt sm",disabled:ciBusy,onClick:()=>go(null)},"Volver a la última fecha del calendario"):null),
   ciMsg?h("p",{className:"sm",role:"status",style:{marginTop:8}},ciMsg):null);
 }
 
@@ -1743,6 +1776,7 @@ function Docente({teams,allW,grades,wg2,openTeam,sorteo,releaseDraw,reopen,clave
       ss.map((s,i)=>h("td",{key:i,className:"c "+s.c,title:s.l},s.s)),h("td",{className:"c"},Math.round(done/8*100)+"%"),
       h("td",null,h("button",{className:"btn alt sm",onClick:()=>openTeam(n)},"Abrir")));})))),
    h("p",{className:"sm mut"},"✓ Entregado · Tarde = después de la fecha · ✗ No entregado con el plazo vencido · · Pendiente. «Abrir» muestra el trabajo del equipo para revisar y calificar en cada semana.")),
+  h(AvancePendientes,{G,TT,teams,allW,grades,openTeam}),
   h("div",{className:"card"},h("h2",null,"Sorteo de alternativas A y B · ambos grupos"),
    h("p",{className:"sm mut"},"Libres: "+POOL.filter(x=>!takenBy(sorteo,x)).length+" de "+POOL.length+" organizaciones. Ninguna se repite entre equipos de Liderazgo y Administración."),
    h("div",{className:"w"},h("table",null,h("thead",null,h("tr",null,h("th",null,"Equipo"),h("th",null,"Alternativa A"),h("th",null,"Alternativa B"),h("th",null,"Fecha"),h("th",null,""))),

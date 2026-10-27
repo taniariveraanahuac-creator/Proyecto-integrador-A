@@ -692,7 +692,7 @@ var PESOS = [0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1, 0.15], PESO_PITCH = 0.1;
 var LIMITES = ["2026-10-18", "2026-10-25", "2026-11-01", "2026-11-05", "2026-11-10", "2026-11-15", "2026-11-19", "2026-11-24"];
 function fechasValidas_(v) {
   return Array.isArray(v) && v.length === LIMITES.length && v.every(function (d, i) {
-    return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00:00-05:00").getTime()) && (i === 0 || d >= v[i - 1]);
+    return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00:00-05:00").getTime());   // ya no se exige orden: cada semana puede tener su propia fecha
   });
 }
 /* Fechas vigentes: las guardadas por la docente en el Panel docente; si no hay, las originales (LIMITES). */
@@ -705,7 +705,7 @@ function limites_() {
 function guardarCalendario_(fechas) {
   var P = PropertiesService.getScriptProperties(), antesCal = limites_().slice();
   if (fechas == null || fechas === "" || (Array.isArray(fechas) && !fechas.length)) P.deleteProperty("CALENDARIO");
-  else if (!fechasValidas_(fechas)) return { ok: false, msg: "Fechas no válidas: deben ser 8, con formato AAAA-MM-DD y en orden (S1 ≤ S2 ≤ … ≤ S8)." };
+  else if (!fechasValidas_(fechas)) return { ok: false, msg: "Fechas no válidas: deben ser 8, con formato AAAA-MM-DD." };
   else P.setProperty("CALENDARIO", JSON.stringify(fechas));
   registrarFechas_(antesCal, limites_(), "Calendario (todos los equipos)");
   subirRev_();   // avisa a todas las páginas abiertas
@@ -728,12 +728,14 @@ function registrarFechas_(antes, despues, que) {
    (quedan registradas como tardías). Por omisión es la fecha de la S8; la docente la amplía
    desde el Panel docente hasta 5 años después de hoy. Se guarda en la propiedad CIERRE. */
 var MAX_ANIOS_CIERRE = 5;
+/* La fecha límite más tardía del calendario (las semanas ya no tienen que ir en orden). */
+function ultimaFecha_() { return limites_().slice().sort().pop(); }
 function cierreGuardado_() {
   var c = PropertiesService.getScriptProperties().getProperty("CIERRE") || "";
   return /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : "";
 }
 function cierreMs_() {
-  var L = limites_(), s8 = new Date(L[L.length - 1] + "T23:59:59-05:00").getTime(), c = cierreGuardado_();
+  var s8 = new Date(ultimaFecha_() + "T23:59:59-05:00").getTime(), c = cierreGuardado_();
   return c ? Math.max(s8, new Date(c + "T23:59:59-05:00").getTime()) : s8;
 }
 /* Lo que recibe la página: las 8 fechas límite y, si hay ampliación, la fecha de cierre como 9.º elemento. */
@@ -745,7 +747,7 @@ function guardarCierre_(fecha) {
     fecha = String(fecha);
     var L = limites_(), max = Utilities.formatDate(new Date(Date.now() + MAX_ANIOS_CIERRE * 366 * 864e5), "America/Cancun", "yyyy-MM-dd");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || isNaN(new Date(fecha + "T12:00:00-05:00").getTime())) return { ok: false, msg: "Fecha no válida (AAAA-MM-DD)." };
-    if (fecha < L[L.length - 1]) return { ok: false, msg: "El cierre general no puede ser antes de la fecha de la S8 (" + L[L.length - 1] + ")." };
+    if (fecha < ultimaFecha_()) return { ok: false, msg: "El cierre general no puede ser antes de la última fecha límite del calendario (" + ultimaFecha_() + ")." };
     if (fecha > max) return { ok: false, msg: "El cierre general puede ampliarse como máximo " + MAX_ANIOS_CIERRE + " años (hasta " + max + ")." };
     P.setProperty("CIERRE", fecha);
   }
