@@ -114,15 +114,18 @@ const CALENDARIO=["2026-10-18","2026-10-25","2026-11-01","2026-11-05","2026-11-1
 window.PI_CAL_ORIGINAL=CALENDARIO.slice();
 /* Cierre general ampliado por la docente (9.º elemento de la lista que envía el servidor): hasta esa fecha
    los equipos pueden seguir capturando y entregar semanas atrasadas. Máximo 5 años a partir de hoy. */
-let CIERRE_EXT="";
+/* Cierre general base: hasta el 19 de diciembre de 2026 se pueden entregar semanas atrasadas.
+   La docente puede ampliarlo desde el Panel docente (hasta 5 años). */
+const CIERRE_BASE="2026-12-19";
+let CIERRE_EXT=CIERRE_BASE;
 const MAX_ANIOS=5,maxISO=()=>{const d=new Date();d.setFullYear(d.getFullYear()+MAX_ANIOS);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
 /* Las fechas vigentes salen de dos fuentes: lo que envía el servidor (CAL_SRV) y la copia que la docente
    guarda en el documento de cada equipo (CAL_EQ, campo «cal»). La copia del equipo manda: así las fechas
    se conservan aunque el servidor de Apps Script todavía no esté actualizado. */
 let CAL_SRV=null,CAL_EQ=null;
 const isoD=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
-const recalcCal=()=>{W.forEach((w,i)=>{w.d=CALENDARIO[i];});CIERRE_EXT="";
- [CAL_SRV,CAL_EQ].forEach(l=>{if(!Array.isArray(l))return;l.forEach((d,i)=>{if(W[i]&&isoD(d))W[i].d=d;});if(l.length>W.length||l===CAL_EQ){const c=l[W.length];CIERRE_EXT=isoD(c)?c:"";}});};
+const recalcCal=()=>{W.forEach((w,i)=>{w.d=CALENDARIO[i];});CIERRE_EXT=CIERRE_BASE;
+ [CAL_SRV,CAL_EQ].forEach(l=>{if(!Array.isArray(l))return;l.forEach((d,i)=>{if(W[i]&&isoD(d))W[i].d=d;});const c=l[W.length];if(isoD(c))CIERRE_EXT=c;});};
 const aplicarCalendario=lista=>{if(Array.isArray(lista)){CAL_SRV=lista;recalcCal();}};
 const aplicarCalEquipo=cal=>{const l=cal&&Array.isArray(cal.lim)&&cal.lim.length===W.length&&cal.lim.every(isoD)?cal.lim.concat([isoD(cal.cierre)?cal.cierre:""]):null;
  if(JSON.stringify(l)===JSON.stringify(CAL_EQ))return false;CAL_EQ=l;recalcCal();return true;};
@@ -1663,20 +1666,20 @@ function CierreGeneral({ci,setCi,ciMsg,setCiMsg,ciBusy,setCiBusy,s8}){
  const valido=/^\d{4}-\d{2}-\d{2}$/.test(v||"")&&v>=s8&&v<=mx,cambio=(v===s8?"":v)!==(ci||"");
  const go=async fecha=>{setCiBusy(true);setCiMsg("");const r0=await B.cierre(fecha).catch(()=>null);
   const r=window.PI_WCAL?(window.PI_WCAL(W.map(w=>w.d),fecha||""),{ok:true,limites:W.map(w=>w.d).concat([fecha||""])}):r0;setCiBusy(false);
-  if(r&&r.ok){const c=(r.limites||[])[W.length]||"";setCi(c);setCiMsg(c?"✓ Cierre general ampliado al "+fdl(c)+". Todos los equipos ya pueden capturar y entregar sus semanas atrasadas hasta esa fecha.":"✓ El cierre general volvió a la última fecha del calendario.");}
+  if(r&&r.ok){const c=(r.limites||[])[W.length]||"";setCi(c);setCiMsg(c?"✓ Cierre general ampliado al "+fdl(c)+". Todos los equipos ya pueden capturar y entregar sus semanas atrasadas hasta esa fecha.":"✓ El cierre general volvió al 19 de diciembre de 2026.");}
   else setCiMsg("⚠️ "+((r&&r.msg)||"No se pudo guardar."));};
  const efectiva=ci&&ci>s8?ci:s8;
  return h("div",{className:"ex",style:{marginTop:14}},
   h("h3",{style:{marginTop:0}},"🔓 Cierre general · semanas atrasadas"),
   h("p",{className:"sm mut"},"Hasta esta fecha los equipos pueden ",h("b",null,"seguir capturando, guardando y entregando cualquier semana vencida"),", aunque ya haya pasado la S8. Lo que entreguen después de la fecha límite de cada semana queda registrado como tardío (puedes condonar el retraso en la calificación). Puedes ampliarlo hasta ",h("b",null,MAX_ANIOS+" años")," (máximo "+fdl(mx)+")."),
-  h("p",{className:"sm"},"Cierre vigente: ",h("b",null,fdl(efectiva)+", 23:59"),ci&&ci>s8?" (ampliado)":" (última fecha del calendario)"),
+  h("p",{className:"sm"},"Cierre vigente: ",h("b",null,fdl(efectiva)+", 23:59"),ci&&ci>s8?(ci===CIERRE_BASE?" (cierre base del semestre)":" (ampliado)"):" (última fecha del calendario)"),
   h("div",{className:"row",style:{alignItems:"flex-end",marginTop:6}},
    h("div",null,h("label",{className:"l sm",htmlFor:"cierre-gral",style:{marginTop:0}},"Nueva fecha de cierre (escríbela o elígela)"),h("input",{id:"cierre-gral",type:"date",value:v||"",min:s8,max:mx,onChange:e=>{setV(e.target.value);setCiMsg("");}})),
    [["+1 mes",1],["+6 meses",6],["+1 año",12],["+5 años",60]].map(([l,m])=>h("button",{key:l,type:"button",className:"btn alt sm",disabled:ciBusy,onClick:()=>sumar(m)},l))),
   v&&!valido?h("p",{className:"sm",style:{color:"var(--kot)"}},"La fecha debe estar entre la última fecha del calendario ("+fdl(s8)+") y "+fdl(mx)+"."):null,
   h("div",{className:"row",style:{marginTop:8}},
    h("button",{className:"btn sm",disabled:ciBusy||!valido||!cambio,onClick:()=>go(v===s8?null:v)},ciBusy?"Guardando…":"Guardar cierre general"),
-   ci?h("button",{className:"btn alt sm",disabled:ciBusy,onClick:()=>go(null)},"Volver a la última fecha del calendario"):null),
+   ci&&ci!==CIERRE_BASE?h("button",{className:"btn alt sm",disabled:ciBusy,onClick:()=>go(null)},"Volver al cierre base (19 dic 2026)"):null),
   ciMsg?h("p",{className:"sm",role:"status",style:{marginTop:8}},ciMsg):null);
 }
 

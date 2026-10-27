@@ -730,9 +730,10 @@ function registrarFechas_(antes, despues, que) {
 var MAX_ANIOS_CIERRE = 5;
 /* La fecha límite más tardía del calendario (las semanas ya no tienen que ir en orden). */
 function ultimaFecha_() { return limites_().slice().sort().pop(); }
+var CIERRE_BASE = "2026-12-19";   // cierre general base del semestre: hasta aquí se pueden entregar semanas atrasadas
 function cierreGuardado_() {
   var c = PropertiesService.getScriptProperties().getProperty("CIERRE") || "";
-  return /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : CIERRE_BASE;
 }
 function cierreMs_() {
   var s8 = new Date(ultimaFecha_() + "T23:59:59-05:00").getTime(), c = cierreGuardado_();
