@@ -372,6 +372,14 @@
       if (MODE === "local" || !queue.length) return setTimeout(fin, 0);
       setStatus("saving"); vaciarCola().then(fin);
     },
+    /* Botón «Guardar»: envía de inmediato lo escrito y espera la confirmación del servidor (máx. 8 s). */
+    guardarAhora: function () {
+      try { if (typeof window.PI_FLUSH === "function") window.PI_FLUSH(); } catch (e) {}
+      if (MODE === "local") return new Promise(function (r) { setTimeout(function () { r({ ok: true }); }, 300); });
+      return sleep(50).then(vaciarCola).then(function () {
+        return { ok: !queue.length && status.state !== "error", pendientes: queue.length, offline: status.state === "offline", msg: status.state === "error" ? status.msg : "" };
+      });
+    },
     /* Respaldo local de cambios no aceptados: la docente o el alumno lo pueden descargar como archivo. */
     respaldoLocal: function () { try { return JSON.parse(lsg(K_RESP) || "[]"); } catch (e) { return []; } },
     /* Integrante que captura (lo confirma el equipo tras entrar con su clave; el servidor lo valida). */

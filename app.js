@@ -270,8 +270,15 @@ function AutoGuardado(){
  useEffect(()=>B&&B.onStatus?B.onStatus(setSt):undefined,[]);
  /* «Guardado» solo cuando el servidor ya lo tiene; sin internet avisa que queda en este navegador y se envía solo. */
  const off=st.state==="offline",er=st.state==="error",env=st.state==="saving";
- return h("span",{className:"pill "+(s.err||er||off?"ko":s.n||env?"wa":s.at?"ok":""),role:"status","aria-live":"polite",style:{whiteSpace:"normal"}},
-  off?"Sin conexión: lo escrito queda en este navegador y se enviará solo al volver internet":er?(st.msg||"No se pudo guardar; se reintentará solo"):s.err?"No se pudo guardar; se reintentará solo":s.n||env?"Guardando…":s.at?"✓ Guardado en el servidor a las "+hora(s.at):"Se guarda solo mientras escriben");
+ /* Además del guardado automático, el alumno puede presionar «Guardar» cuando quiera. */
+ const [g,setG]=useState(""),[gm,setGm]=useState("");
+ const guardar=async()=>{if(g==="b")return;setG("b");setGm("");let r;try{r=B&&B.guardarAhora?await B.guardarAhora():{ok:true};}catch(e){r={ok:false};}
+  setG(r&&r.ok?"ok":"ko");setGm(r&&r.ok?"✓ Guardado a las "+hora(Date.now()):r&&r.offline?"Sin internet: quedó en este navegador y se enviará solo al volver la conexión":(r&&r.msg)||"Aún no se confirma; se sigue intentando solo");
+  setTimeout(()=>setG(x=>x==="b"?x:""),6000);};
+ return h("span",{className:"row",style:{gap:6,alignItems:"center",flexWrap:"wrap"}},
+  h("span",{className:"pill "+(s.err||er||off?"ko":s.n||env?"wa":s.at?"ok":""),role:"status","aria-live":"polite",style:{whiteSpace:"normal"}},
+   g&&gm&&g!=="b"?gm:off?"Sin conexión: lo escrito queda en este navegador y se enviará solo al volver internet":er?(st.msg||"No se pudo guardar; se reintentará solo"):s.err?"No se pudo guardar; se reintentará solo":s.n||env||g==="b"?"Guardando…":s.at?"✓ Guardado automáticamente a las "+hora(s.at):"Se guarda solo mientras escriben"),
+  h("button",{type:"button",className:"btn sm",disabled:g==="b",onClick:guardar,title:"Guarda de inmediato lo que han escrito (también se guarda solo)"},g==="b"?"Guardando…":"💾 Guardar"));
 }
 
 /* ---------- Piezas comunes ---------- */
@@ -1040,7 +1047,8 @@ function Semana({wi,t,tm,wd,ww,me,myName,isAdmin,gr,wg,setView}){
    h("h3",{style:{marginTop:14}},"5. Fuentes y anexos"),
    h(Field,{id:"s"+wi+"src",l:"Fuentes en APA 7 (una por línea)",area:true,ro:!canEdit,v:wd&&wd.src,on:v=>ww(["src"],v),ph:"Pérez, A. (2026, 8 de octubre). Comunicación personal [entrevista].\nINEGI. (2026). DENUE. https://www.inegi.org.mx/app/mapa/denue/"}),
    h(Field,{id:"s"+wi+"link",l:"Liga a anexos (opcional): presentación, organigrama, Canvas, fotos o video",type:"url",ro:!canEdit,v:link,on:v=>ww(["link"],v),ph:"https://drive.google.com/…"}),
-   link&&!linkOk?h("p",{className:"sm",style:{color:"var(--kot)"}},"La liga debe empezar con https://"):linkOk?h("p",{className:"sm"},h("a",{href:link.trim(),target:"_blank",rel:"noopener"},"Abrir anexos")):null),
+   link&&!linkOk?h("p",{className:"sm",style:{color:"var(--kot)"}},"La liga debe empezar con https://"):linkOk?h("p",{className:"sm"},h("a",{href:link.trim(),target:"_blank",rel:"noopener"},"Abrir anexos")):null,
+   canEdit?h("div",{className:"bar",style:{marginTop:12,justifyContent:"flex-end"}},h(AutoGuardado)):null),
   w.fin?h(EntregableFinal,{wd,ww,canEdit,setView}):null,
   h(AportesRol,{t,wi,tm,wd,me,isAdmin,canEdit,ww,gr,wg}),
   h(CalifIndividual,{wi,tm,wd,gr,wg,isAdmin,me}),
