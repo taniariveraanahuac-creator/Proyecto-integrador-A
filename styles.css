@@ -107,3 +107,7 @@ label.tarjeta:hover{border-color:var(--or)}
 .tarjeta.sel .check{background:var(--or);border-color:var(--or)}
 .linklike{background:none;border:0;padding:0;color:var(--ord);font:600 .82rem var(--sans);cursor:pointer;text-align:left;text-decoration:underline;align-self:flex-start;margin-top:2px}
 @media (prefers-reduced-motion:reduce){.sel-bar i,.tarjeta{transition:none}}
+
+/* Espacio para la barra fija de guardado */
+body{padding-bottom:72px}
+@media print{body{padding-bottom:0}}

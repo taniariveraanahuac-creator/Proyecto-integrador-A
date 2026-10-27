@@ -1921,7 +1921,7 @@ function App(){
   if(s[0]==="teams"&&s.length===2)setTeams(prev=>({...prev,[s[1]]:setIn(prev[s[1]]||{},p,v)}));
   else if(s[0]==="grades")setGrades(prev=>({...prev,[s[1]]:setIn(prev[s[1]]||{},p,v)}));
   else if(s[0]==="teams"&&s.length===4)setW(prev=>({...prev,[s[3]]:setIn(prev[s[3]]||{},p,v)}));};
- const write=(path,p,v,delay)=>{local(path,p,v);if(!db)return;
+ const write=(path,p,v,delay)=>{local(path,p,v);copiaTrabajo(path,p,v,nameRef.current);if(!db)return;
   const key=path+"|"+p.join(".");pend.current.set(key,{path,p,v});clearTimeout(timers.current[key]);
   if(!sched.current.has(key)){sched.current.add(key);AG.set({n:AG.n+1});}
   const run=async()=>{delete timers.current[key];delete fns.current[key];
@@ -2052,7 +2052,8 @@ function App(){
    inTeam?h("p",{style:{fontWeight:700,marginTop:6}},tLab(team)+(empOfTeam(tm)?" · "+empOfTeam(tm).n:" · organización por registrar")+(myName?" · "+myName+(rolesAOf(tm,me).length?" ("+rolesAOf(tm,me).join("/")+")":""):isAdmin?" · revisión docente":"")):null),
   tabs.length?h("nav",{className:"nv","aria-label":"Secciones",ref:navRef},tabs.map(([k,l])=>h("button",{key:k,"aria-current":view===k?"page":undefined,onClick:()=>nav(k)},l))):null,
   h("main",null,body),
-  h(Pie,{isAdmin,eqSes,quien:eqSes&&meOk?nameRef.current:"",salir:()=>salirSes("")}));
+  h(Pie,{isAdmin,eqSes,quien:eqSes&&meOk?nameRef.current:"",salir:()=>salirSes("")}),
+  isAdmin||(eqSes&&meOk)?h(BarraGuardar):null);
 }
 
 /* ---------- Pie: estado de guardado y acceso docente ---------- */
@@ -2070,13 +2071,31 @@ function Pie({isAdmin,eqSes,quien,salir}){
   h("p",{className:"sm mut",style:{marginTop:8}},"Proyecto Integrador · ADM1401 Introducción a la Empresa · Escuela Internacional de Negocios · Universidad Anáhuac Cancún"));
 }
 
+/* Copia de trabajo: cada campo que escribe el alumno (o la docente) se guarda también en este navegador,
+   con la fecha y quién lo escribió. Es una red de seguridad del avance individual y del equipo:
+   si algo se perdiera en el servidor, se puede descargar y recuperar. Clave «PI-…» en mayúsculas para que «Salir» no la borre. */
+const K_COPIA="PI-COPIA-v1";
+function copiaTrabajo(path,p,v,quien){try{if(!/^teams\//.test(path))return;const o=JSON.parse(localStorage.getItem(K_COPIA)||"{}"),k=path+"|"+p.join(".");
+ o[k]={v,at:Date.now(),by:quien||""};let txt=JSON.stringify(o);
+ if(txt.length>3e6){const ks=Object.keys(o).sort((a,b)=>o[a].at-o[b].at);while(txt.length>3e6&&ks.length){delete o[ks.shift()];txt=JSON.stringify(o);}}
+ localStorage.setItem(K_COPIA,txt);}catch(e){}}
+const copiaN=()=>{try{return Object.keys(JSON.parse(localStorage.getItem(K_COPIA)||"{}")).length;}catch(e){return 0;}};
+/* Barra fija de guardado: siempre a la vista, en cualquier sección (fechas, entregas, aportes por rol, Mi equipo). */
+function BarraGuardar(){
+ return h("div",{className:"noprint",style:{position:"fixed",right:12,bottom:12,zIndex:50,background:"var(--card)",border:"1px solid var(--line)",borderRadius:12,padding:"6px 8px",boxShadow:"0 4px 16px rgba(0,0,0,.18)",maxWidth:"calc(100vw - 24px)"}},h(AutoGuardado));
+}
 /* Cambios que el servidor no aceptó o que no alcanzaron a enviarse: quedan en este navegador y se pueden descargar. */
 function RespaldoNavegador(){
- const B=window.PI_BACKEND,[n,setN]=useState(()=>B.respaldoLocal?B.respaldoLocal().length:0);
- useEffect(()=>B.onStatus?B.onStatus(()=>setN(B.respaldoLocal?B.respaldoLocal().length:0)):undefined,[]);
- if(!n)return null;
+ const B=window.PI_BACKEND,[n,setN]=useState(()=>B.respaldoLocal?B.respaldoLocal().length:0),[nc,setNc]=useState(copiaN);
+ useEffect(()=>B.onStatus?B.onStatus(()=>{setN(B.respaldoLocal?B.respaldoLocal().length:0);setNc(copiaN());}):undefined,[]);
+ useEffect(()=>{const i=setInterval(()=>setNc(copiaN()),5000);return()=>clearInterval(i);},[]);
+ const bajarCopia=()=>{let o={};try{o=JSON.parse(localStorage.getItem(K_COPIA)||"{}");}catch(e){}
+  const rows=[["Ruta","Campo","Texto o valor","Escrito el","Por"]];Object.keys(o).sort().forEach(k=>{const [ru,ca]=k.split("|"),x=o[k];rows.push([ru,ca,typeof x.v==="string"?x.v:JSON.stringify(x.v),fmt(x.at),x.by]);});
+  B.download&&B.download({filename:"Mi_copia_de_trabajo_PI_"+hoyISO()+".csv",data:"\ufeff"+rows.map(r=>r.map(csvq).join(",")).join("\n")});};
+ const copia=nc?h("p",{className:"sm mut",style:{marginTop:8}},"💾 Este navegador guarda una copia de todo lo que se ha escrito aquí ("+nc+" campo"+(nc>1?"s":"")+"). ",h("button",{type:"button",className:"btn alt sm",onClick:bajarCopia},"Descargar mi copia de trabajo")):null;
+ if(!n)return copia;
  const bajar=()=>{const a=B.respaldoLocal(),txt=JSON.stringify(a,null,1);B.download?B.download({filename:"Respaldo_navegador_PI_"+hoyISO()+".json",data:txt}):null;};
- return h("p",{className:"sm",style:{marginTop:8}},"💾 Este navegador guarda una copia de "+n+" cambio(s) que no llegaron al servidor. ",h("button",{type:"button",className:"btn alt sm",onClick:bajar},"Descargar copia"),h("span",{className:"sm mut"}," (envíala a la docente si te falta información)."));
+ return h("div",null,h("p",{className:"sm",style:{marginTop:8}},"💾 Este navegador guarda una copia de "+n+" cambio(s) que no llegaron al servidor. ",h("button",{type:"button",className:"btn alt sm",onClick:bajar},"Descargar copia"),h("span",{className:"sm mut"}," (envíala a la docente si te falta información).")),copia);
 }
 
 /* ---------- Respaldo de datos (panel docente) ---------- */
